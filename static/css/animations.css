@@ -1,0 +1,72 @@
+@keyframes splashFadeOut { to { opacity: 0; visibility: hidden; } }
+
+@keyframes splashPulse {
+    0%, 80%, 100% { transform: scale(0); opacity: 0; }
+    40% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInRight {
+    from { transform: translateX(100%); opacity: .3; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slideOutLeft {
+    from { transform: translateX(0); opacity: 1; }
+    to { transform: translateX(-30%); opacity: 0; }
+}
+
+@keyframes slideInLeft {
+    from { transform: translateX(-100%); opacity: .3; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+@keyframes toastSlideIn {
+    from { transform: translate(-50%, 100px); opacity: 0; }
+    to { transform: translate(-50%, 0); opacity: 1; }
+}
+
+@keyframes toastSlideOut {
+    from { transform: translate(-50%, 0); opacity: 1; }
+    to { transform: translate(-50%, 100px); opacity: 0; }
+}
+
+.img-blur { filter: blur(10px); transition: filter .3s ease; }
+.img-clear { filter: blur(0); }
+
+.btn-press:active { transform: scale(0.95); transition: transform 100ms ease; }
+
+.card-enter { animation: fadeInUp 0.3s ease forwards; opacity: 0; }
+
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+.slide-in-right { animation: slideInRight .28s ease; }
+.slide-in-left { animation: slideInLeft .28s ease; }
+
+.skeleton-box {
+    background: linear-gradient(90deg,
+        var(--bg-secondary) 25%,
+        var(--bg-tertiary) 50%,
+        var(--bg-secondary) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+    border-radius: var(--card-radius);
+}
+
+.splash-loader { display: flex; gap: 8px; justify-content: center; margin-top: 20px; }
+.splash-loader .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--accent-primary);
+    animation: splashPulse 1.4s ease-in-out infinite both;
+}
+.splash-loader .dot:nth-child(2) { animation-delay: .2s; }
+.splash-loader .dot:nth-child(3) { animation-delay: .4s; }
