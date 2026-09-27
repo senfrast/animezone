@@ -94,6 +94,14 @@ async def run_migrations():
     # Idempotent patches — always safe to run, applied on every boot.
     patches = [
         "ALTER TABLE titles ADD COLUMN IF NOT EXISTS is_approved BOOLEAN DEFAULT TRUE",
+        """CREATE TABLE IF NOT EXISTS bot_admins (
+            user_id BIGINT PRIMARY KEY,
+            role VARCHAR(20) DEFAULT 'moderator',
+            first_name VARCHAR(255),
+            username VARCHAR(255),
+            added_by BIGINT,
+            added_at TIMESTAMPTZ DEFAULT NOW()
+        )""",
     ]
     async with pool.acquire() as conn:
         for stmt in patches:

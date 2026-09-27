@@ -15,11 +15,13 @@ from database import pool as db
 from handlers import start as start_h
 from handlers.admin import broadcast as admin_broadcast
 from handlers.admin import categories as admin_cats
+from handlers.admin import manage as admin_manage
 from handlers.admin import panel as admin_panel
 from handlers.admin import titles as admin_titles
 from handlers.callbacks import router as callback_router
 from handlers.user import settings as user_settings
 from services import scheduler_service, server
+from utils import roles
 
 logging.basicConfig(
     level=logging.INFO,
@@ -34,6 +36,8 @@ def register_handlers(application):
     application.add_handler(admin_titles.build_add_title_conv())
     application.add_handler(admin_cats.build_add_category_conv())
     application.add_handler(admin_broadcast.build_broadcast_conv())
+    application.add_handler(admin_manage.build_add_mod_conv())
+    application.add_handler(admin_manage.build_restore_conv())
     # 5-9 commands
     application.add_handler(CommandHandler("start", start_h.start))
     application.add_handler(CommandHandler("admin", admin_panel.admin_command))
@@ -63,6 +67,7 @@ async def run():
     log.info("Starting AnimeZone…")
     await db.init_pool()
     await db.run_migrations()
+    await roles.refresh()  # load panel-managed moderators into the cache
 
     application = (
         ApplicationBuilder()

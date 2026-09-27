@@ -271,3 +271,13 @@ CREATE TABLE IF NOT EXISTS content_requests (
 );
 
 CREATE INDEX IF NOT EXISTS idx_cr_status ON content_requests(status);
+
+-- ============= BOT ADMINS (panel-managed moderators) =============
+CREATE TABLE IF NOT EXISTS bot_admins (
+    user_id BIGINT PRIMARY KEY,
+    role VARCHAR(20) DEFAULT 'moderator',
+    first_name VARCHAR(255),
+    username VARCHAR(255),
+    added_by BIGINT,
+    added_at TIMESTAMPTZ DEFAULT NOW()
+);

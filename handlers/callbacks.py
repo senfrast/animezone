@@ -7,6 +7,7 @@ from telegram.ext import ContextTypes
 import config
 from handlers import start as start_h
 from handlers.admin import categories as admin_cats
+from handlers.admin import manage as admin_manage
 from handlers.admin import panel as admin_panel
 from handlers.user import settings as user_settings
 
@@ -52,6 +53,9 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("reject:"):
         await admin_panel.reject_title(update, context)
         return
+    if data.startswith("delmod:"):
+        await admin_manage.remove_mod(update, context)
+        return
 
     # --- admin gate ---
     if data.startswith("admin:"):
@@ -67,6 +71,10 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await admin_panel.admin_home(update, context)
         elif data == "admin:pending":
             await admin_panel.pending_approvals(update, context)
+        elif data == "admin:mods":
+            await admin_manage.mods_view(update, context)
+        elif data == "admin:backup":
+            await admin_manage.backup_now(update, context)
         elif data == "admin:cats":
             await admin_cats.list_cats(update, context)
         elif data.startswith("admin:titles"):
