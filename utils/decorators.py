@@ -20,6 +20,23 @@ def admin_only(func):
     return wrapper
 
 
+def owner_only(func):
+    @wraps(func)
+    async def wrapper(update, context, *args, **kwargs):
+        user = update.effective_user
+        if not user or not config.is_owner(user.id):
+            if update.callback_query:
+                await update.callback_query.answer(
+                    "⛔ Only the owner can do this.", show_alert=True
+                )
+            elif update.message:
+                await update.message.reply_text("⛔ Only the owner can use this.")
+            return
+        return await func(update, context, *args, **kwargs)
+
+    return wrapper
+
+
 def track_user(func):
     @wraps(func)
     async def wrapper(update, context, *args, **kwargs):

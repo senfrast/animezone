@@ -212,7 +212,10 @@ async def search(query: str, show_nsfw: bool, limit: int = 20):
 
 
 # ---------------- mutations ----------------
-async def create(data: dict):
+async def create(data: dict, approved: bool = True):
+    """Create a title. If approved=False the title is saved as PENDING:
+    is_active=FALSE + is_approved=FALSE, so it stays hidden from the app
+    until an owner approves it."""
     slug = slugify(data["title"])
     # ensure unique slug
     n = 1
@@ -224,8 +227,8 @@ async def create(data: dict):
         """
         INSERT INTO titles (title, title_alt, slug, category_id, description,
             channel_link, channel_username, image_file_id, language, status,
-            episode_count, is_nsfw, added_by)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+            episode_count, is_nsfw, added_by, is_active, is_approved)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
         RETURNING *
         """,
         data["title"], data.get("title_alt"), slug, data["category_id"],
@@ -233,6 +236,7 @@ async def create(data: dict):
         data.get("image_file_id"), data.get("language", "Hindi"),
         data.get("status", "Ongoing"), int(data.get("episode_count", 0)),
         bool(data.get("is_nsfw", False)), data.get("added_by"),
+        approved, approved,
     )
     for gid in data.get("genre_ids", []):
         await db.execute(
@@ -240,6 +244,32 @@ async def create(data: dict):
             row["title_id"], gid,
         )
     return row
+
+
+# ---------------- approval workflow ----------------
+async def list_pending():
+    return await db.fetch(
+        f"{_SELECT} WHERE t.is_approved = FALSE ORDER BY t.added_at ASC"
+    )
+
+
+async def count_pending():
+    return await db.fetchval(
+        "SELECT COUNT(*) FROM titles WHERE is_approved = FALSE"
+    ) or 0
+
+
+async def approve(tid: int):
+    row = await db.fetchrow(
+        "UPDATE titles SET is_approved=TRUE, is_active=TRUE, updated_at=NOW() "
+        "WHERE title_id=$1 RETURNING *",
+        tid,
+    )
+    return row
+
+
+async def get_pending_by_id(tid: int):
+    return await db.fetchrow(f"{_SELECT} WHERE t.title_id=$1 AND t.is_approved=FALSE", tid)
 
 
 async def set_active(tid: int, value: bool):

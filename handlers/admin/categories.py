@@ -38,7 +38,8 @@ async def list_cats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cat_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
-    if not config.is_admin(q.from_user.id):
+    if not config.is_owner(q.from_user.id):
+        await q.answer("⛔ Owner only", show_alert=True)
         return ConversationHandler.END
     context.user_data["new_cat"] = {}
     await q.message.reply_text("📂 Send the category name:")
@@ -76,7 +77,7 @@ async def cat_nsfw(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def delcat_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not config.is_admin(update.effective_user.id):
+    if not config.is_owner(update.effective_user.id):
         return
     cid = (update.message.text or "").replace("/delcat_", "").strip()
     if cid.isdigit():

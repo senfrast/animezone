@@ -12,21 +12,33 @@ from database.queries import titles as titles_q
 from database.queries import users as users_q
 from services import link_validator
 from utils import keyboards
-from utils.decorators import admin_only
+from utils.decorators import admin_only, owner_only
 
 log = logging.getLogger("admin")
 
 
-async def _render_home(target, edit=True):
-    stats = await analytics_q.quick_stats()
-    text = (
-        "👑 <b>ANIMEZONE ADMIN PANEL</b>\n\n"
-        "━━━ 📊 QUICK STATS ━━━━━━\n"
-        f"👥 Users: {stats['users']} │ 📱 Opens Today: {stats['opens_today']}\n"
-        f"🔗 Clicks Today: {stats['clicks_today']} │ 📂 Titles: {stats['titles']}\n"
-        f"📝 Pending Requests: {stats['pending_requests']}"
-    )
-    kb = keyboards.admin_home_kb()
+async def _render_home(target, user_id, edit=True):
+    is_owner = config.is_owner(user_id)
+    if not is_owner:
+        # Moderator view — minimal, no sensitive stats.
+        text = (
+            "🛠️ <b>SUB-ADMIN PANEL</b>\n\n"
+            "You can submit new titles. Each submission is reviewed by the owner "
+            "and goes live only after approval.\n\n"
+            "Tap <b>➕ Add New Title</b> to begin."
+        )
+        kb = keyboards.admin_home_kb(is_owner=False)
+    else:
+        stats = await analytics_q.quick_stats()
+        pending = await titles_q.count_pending()
+        text = (
+            "👑 <b>ANIMEZONE ADMIN PANEL</b>\n\n"
+            "━━━ 📊 QUICK STATS ━━━━━━\n"
+            f"👥 Users: {stats['users']} │ 📱 Opens Today: {stats['opens_today']}\n"
+            f"🔗 Clicks Today: {stats['clicks_today']} │ 📂 Titles: {stats['titles']}\n"
+            f"🕒 Pending Approvals: {pending} │ 📝 Requests: {stats['pending_requests']}"
+        )
+        kb = keyboards.admin_home_kb(is_owner=True, pending=pending)
     if hasattr(target, "edit_message_text") and edit:
         await target.edit_message_text(text, reply_markup=kb, parse_mode="HTML")
     else:
@@ -35,13 +47,13 @@ async def _render_home(target, edit=True):
 
 @admin_only
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await _render_home(update.message, edit=False)
+    await _render_home(update.message, update.effective_user.id, edit=False)
 
 
 async def admin_home(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
-    await _render_home(q.message)
+    await _render_home(q.message, q.from_user.id)
 
 
 async def dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -183,7 +195,7 @@ async def settings_view(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.edit_message_text("\n".join(lines), reply_markup=keyboards.back_admin_kb(), parse_mode="HTML")
 
 
-@admin_only
+@owner_only
 async def set_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from database.queries import settings as settings_q
 
@@ -196,7 +208,7 @@ async def set_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"✅ {key} = {value}")
 
 
-@admin_only
+@owner_only
 async def req_done_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text or ""
     rid = text.replace("/req_done_", "").strip()
@@ -205,7 +217,7 @@ async def req_done_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"✅ Request #{rid} marked done.")
 
 
-@admin_only
+@owner_only
 async def unfeature_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text or ""
     tid = text.replace("/unfeature_", "").strip()
@@ -214,7 +226,7 @@ async def unfeature_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"✅ Title #{tid} removed from featured.")
 
 
-@admin_only
+@owner_only
 async def feature_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text or ""
     tid = text.replace("/feature_", "").strip()
@@ -225,13 +237,126 @@ async def feature_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"⭐ Title #{tid} is now featured (order {order}).")
 
 
-@admin_only
+@owner_only
 async def del_title_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text or ""
     tid = text.replace("/delete_", "").strip()
     if tid.isdigit():
         await titles_q.delete(int(tid))
         await update.message.reply_text(f"🗑️ Title #{tid} deleted.")
+
+
+async def pending_approvals(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Owner-only queue of titles awaiting approval."""
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+    q = update.callback_query
+    await q.answer()
+    if not config.is_owner(q.from_user.id):
+        await q.answer("⛔ Owner only", show_alert=True)
+        return
+    rows = await titles_q.list_pending()
+    if not rows:
+        await q.edit_message_text(
+            "🕒 <b>PENDING APPROVALS</b>\n\nNothing waiting. You're all caught up! ✅",
+            reply_markup=keyboards.back_admin_kb(),
+            parse_mode="HTML",
+        )
+        return
+    await q.edit_message_text(
+        f"🕒 <b>PENDING APPROVALS ({len(rows)})</b>\n\nReview each below 👇",
+        reply_markup=keyboards.back_admin_kb(),
+        parse_mode="HTML",
+    )
+    for r in rows[:15]:
+        caption = (
+            f"<b>{r['title']}</b>\n"
+            f"📂 {r['category_emoji']} {r['category_name']}\n"
+            f"🌐 {r['language']} · 📊 {r['status']} · 📺 {r['episode_count']} eps\n"
+            f"🔞 {'Yes' if r['is_nsfw'] else 'No'}\n"
+            f"🔗 {r['channel_link']}\n"
+            f"👤 Submitted by: {r['added_by']}"
+        )
+        kb = InlineKeyboardMarkup([[
+            InlineKeyboardButton("✅ Approve", callback_data=f"approve:{r['title_id']}"),
+            InlineKeyboardButton("🗑️ Reject", callback_data=f"reject:{r['title_id']}"),
+        ]])
+        try:
+            if r["image_file_id"]:
+                await context.bot.send_photo(q.from_user.id, r["image_file_id"], caption=caption, reply_markup=kb, parse_mode="HTML")
+            else:
+                await context.bot.send_message(q.from_user.id, caption, reply_markup=kb, parse_mode="HTML")
+        except Exception:  # noqa: BLE001
+            pass
+
+
+async def approve_title(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    if not config.is_owner(q.from_user.id):
+        await q.answer("⛔ Owner only", show_alert=True)
+        return
+    tid = int(q.data.split(":")[1])
+    pending = await titles_q.get_pending_by_id(tid)
+    if not pending:
+        await q.answer("Already handled or not found", show_alert=True)
+        await _clear_markup(q)
+        return
+    row = await titles_q.approve(tid)
+    await categories_q.refresh_count(row["category_id"])
+    await q.answer("✅ Approved & live")
+    await _mark_handled(q, f"✅ APPROVED — {row['title']} is now live.")
+    # notify the moderator who submitted it
+    if row["added_by"]:
+        try:
+            await context.bot.send_message(
+                row["added_by"], f"✅ Your submission <b>{row['title']}</b> was approved and is now live!",
+                parse_mode="HTML",
+            )
+        except Exception:  # noqa: BLE001
+            pass
+
+
+async def reject_title(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    if not config.is_owner(q.from_user.id):
+        await q.answer("⛔ Owner only", show_alert=True)
+        return
+    tid = int(q.data.split(":")[1])
+    pending = await titles_q.get_pending_by_id(tid)
+    if not pending:
+        await q.answer("Already handled or not found", show_alert=True)
+        await _clear_markup(q)
+        return
+    submitter = pending["added_by"]
+    title_name = pending["title"]
+    await titles_q.delete(tid)
+    await q.answer("🗑️ Rejected & removed")
+    await _mark_handled(q, f"🗑️ REJECTED — {title_name} was removed.")
+    if submitter:
+        try:
+            await context.bot.send_message(
+                submitter, f"🗑️ Your submission <b>{title_name}</b> was not approved by the owner.",
+                parse_mode="HTML",
+            )
+        except Exception:  # noqa: BLE001
+            pass
+
+
+async def _mark_handled(q, text):
+    try:
+        if q.message and q.message.caption is not None:
+            await q.edit_message_caption(caption=text, reply_markup=None)
+        else:
+            await q.edit_message_text(text, reply_markup=None)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+async def _clear_markup(q):
+    try:
+        await q.edit_message_reply_markup(reply_markup=None)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 async def titles_page(update: Update, context: ContextTypes.DEFAULT_TYPE):

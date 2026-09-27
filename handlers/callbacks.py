@@ -45,13 +45,28 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await user_settings.toggle_notifications(update, context)
         return
 
+    # --- approval workflow (owner only, checked inside handlers) ---
+    if data.startswith("approve:"):
+        await admin_panel.approve_title(update, context)
+        return
+    if data.startswith("reject:"):
+        await admin_panel.reject_title(update, context)
+        return
+
     # --- admin gate ---
     if data.startswith("admin:"):
         if not config.is_admin(q.from_user.id):
             await q.answer("⛔ Admins only", show_alert=True)
             return
+        # Actions a moderator (non-owner) is allowed to reach:
+        MODERATOR_OK = {"admin:home", "admin:addtitle"}
+        if not config.is_owner(q.from_user.id) and data not in MODERATOR_OK:
+            await q.answer("⛔ Owner only", show_alert=True)
+            return
         if data == "admin:home":
             await admin_panel.admin_home(update, context)
+        elif data == "admin:pending":
+            await admin_panel.pending_approvals(update, context)
         elif data == "admin:cats":
             await admin_cats.list_cats(update, context)
         elif data.startswith("admin:titles"):

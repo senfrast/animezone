@@ -48,8 +48,15 @@ def nsfw_confirm_kb():
     ])
 
 
-def admin_home_kb():
+def admin_home_kb(is_owner: bool = True, pending: int = 0):
+    if not is_owner:
+        # Limited sub-admin (moderator): may only submit titles for approval.
+        return InlineKeyboardMarkup([
+            [InlineKeyboardButton("➕ Add New Title", callback_data="admin:addtitle")],
+        ])
+    pend_label = f"🕒 Pending Approvals ({pending})" if pending else "🕒 Pending Approvals"
     return InlineKeyboardMarkup([
+        [InlineKeyboardButton(pend_label, callback_data="admin:pending")],
         [InlineKeyboardButton("📂 Manage Categories", callback_data="admin:cats")],
         [InlineKeyboardButton("➕ Add New Title", callback_data="admin:addtitle")],
         [InlineKeyboardButton("📋 View All Titles", callback_data="admin:titles:0")],

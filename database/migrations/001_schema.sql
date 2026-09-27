@@ -119,6 +119,7 @@ CREATE TABLE IF NOT EXISTS titles (
     featured_order INTEGER DEFAULT 0,
 
     is_active BOOLEAN DEFAULT TRUE,
+    is_approved BOOLEAN DEFAULT TRUE,
     channel_alive BOOLEAN DEFAULT TRUE,
     last_checked_at TIMESTAMPTZ,
 

@@ -81,12 +81,24 @@ async def run_migrations():
         "SELECT EXISTS (SELECT 1 FROM information_schema.tables "
         "WHERE table_schema='public' AND table_name='titles')"
     )
-    if exists:
-        log.info("Migrations: schema already present, skipping.")
-        return
-    path = os.path.join(config.BASE_DIR, "database", "migrations", "001_schema.sql")
-    with open(path, "r", encoding="utf-8") as f:
-        sql = f.read()
+    if not exists:
+        path = os.path.join(config.BASE_DIR, "database", "migrations", "001_schema.sql")
+        with open(path, "r", encoding="utf-8") as f:
+            sql = f.read()
+        async with pool.acquire() as conn:
+            await conn.execute(sql)
+        log.info("Migrations: base schema applied.")
+    else:
+        log.info("Migrations: base schema already present.")
+
+    # Idempotent patches — always safe to run, applied on every boot.
+    patches = [
+        "ALTER TABLE titles ADD COLUMN IF NOT EXISTS is_approved BOOLEAN DEFAULT TRUE",
+    ]
     async with pool.acquire() as conn:
-        await conn.execute(sql)
-    log.info("Migrations: schema applied.")
+        for stmt in patches:
+            try:
+                await conn.execute(stmt)
+            except Exception as e:  # noqa: BLE001
+                log.warning("Patch failed (%s): %s", stmt[:40], e)
+    log.info("Migrations: patches applied.")

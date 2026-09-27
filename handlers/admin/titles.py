@@ -219,15 +219,62 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     d = context.user_data["new_title"]
     d["genre_ids"] = list(d.get("genre_ids", []))
     d["added_by"] = q.from_user.id
-    row = await titles_q.create(d)
-    await categories_q.refresh_count(d["category_id"])
-    context.user_data.pop("new_title", None)
-    await q.message.reply_text(
-        f"✅ <b>{row['title']}</b> is now live! (#{row['title_id']})",
-        reply_markup=keyboards.back_admin_kb(),
-        parse_mode="HTML",
-    )
+
+    # Owners publish instantly. Moderators submit for approval (kept hidden).
+    is_owner = config.is_owner(q.from_user.id)
+    row = await titles_q.create(d, approved=is_owner)
+
+    if is_owner:
+        await categories_q.refresh_count(d["category_id"])
+        context.user_data.pop("new_title", None)
+        await q.message.reply_text(
+            f"✅ <b>{row['title']}</b> is now live! (#{row['title_id']})",
+            reply_markup=keyboards.back_admin_kb(),
+            parse_mode="HTML",
+        )
+    else:
+        context.user_data.pop("new_title", None)
+        await q.message.reply_text(
+            f"📨 <b>{row['title']}</b> was submitted for approval.\n\n"
+            "The owner will review it. It will go live once approved. Thanks! 🙌",
+            reply_markup=keyboards.back_admin_kb(),
+            parse_mode="HTML",
+        )
+        await _notify_owners_pending(context, q.from_user, row)
     return ConversationHandler.END
+
+
+async def _notify_owners_pending(context, submitter, row):
+    """DM every owner about a new pending title with Approve/Reject buttons."""
+    who = submitter.first_name or ""
+    if submitter.username:
+        who += f" (@{submitter.username})"
+    who += f" [{submitter.id}]"
+    caption = (
+        "🕒 <b>NEW TITLE PENDING APPROVAL</b>\n\n"
+        f"<b>{row['title']}</b>\n"
+        f"🌐 {row['language']} · 📊 {row['status']} · 📺 {row['episode_count']} eps\n"
+        f"🔞 {'Yes' if row['is_nsfw'] else 'No'}\n"
+        f"🔗 {row['channel_link']}\n\n"
+        f"Submitted by: {who}"
+    )
+    kb = InlineKeyboardMarkup([[
+        InlineKeyboardButton("✅ Approve", callback_data=f"approve:{row['title_id']}"),
+        InlineKeyboardButton("🗑️ Reject", callback_data=f"reject:{row['title_id']}"),
+    ]])
+    for oid in config.OWNER_IDS:
+        try:
+            if row["image_file_id"]:
+                await context.bot.send_photo(
+                    chat_id=oid, photo=row["image_file_id"], caption=caption,
+                    reply_markup=kb, parse_mode="HTML",
+                )
+            else:
+                await context.bot.send_message(
+                    chat_id=oid, text=caption, reply_markup=kb, parse_mode="HTML",
+                )
+        except Exception as e:  # noqa: BLE001
+            log.warning("Could not notify owner %s: %s", oid, e)
 
 
 def build_add_title_conv() -> ConversationHandler:

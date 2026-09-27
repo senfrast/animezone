@@ -23,7 +23,8 @@ BC_CONTENT, BC_CONFIRM = range(2)
 async def entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
-    if not config.is_admin(q.from_user.id):
+    if not config.is_owner(q.from_user.id):
+        await q.answer("⛔ Owner only", show_alert=True)
         return ConversationHandler.END
     await q.message.reply_text("📢 Send the broadcast message text:")
     return BC_CONTENT
