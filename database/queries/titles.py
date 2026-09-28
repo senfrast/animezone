@@ -346,12 +346,13 @@ async def list_trash():
 
 async def list_all(limit=50, offset=0):
     return await db.fetch(
-        f"{_SELECT} ORDER BY t.added_at DESC LIMIT {int(limit)} OFFSET {int(offset)}"
+        f"{_SELECT} WHERE t.deleted_at IS NULL "
+        f"ORDER BY t.added_at DESC LIMIT {int(limit)} OFFSET {int(offset)}"
     )
 
 
 async def count_all():
-    return await db.fetchval("SELECT COUNT(*) FROM titles") or 0
+    return await db.fetchval("SELECT COUNT(*) FROM titles WHERE deleted_at IS NULL") or 0
 
 
 async def set_featured(tid: int, value: bool, order: int = 0):

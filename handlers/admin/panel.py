@@ -405,11 +405,11 @@ async def titles_page(update: Update, context: ContextTypes.DEFAULT_TYPE):
     total = await titles_q.count_all()
     lines = [f"📋 <b>ALL TITLES</b> ({total})\n"]
     if rows:
-        for r in rows:
+        for i, r in enumerate(rows, start=offset + 1):
             star = "⭐" if r["is_featured"] else ""
             nsfw = "🔞" if r["is_nsfw"] else ""
             lines.append(
-                f"#{r['title_id']} {star}{nsfw} <b>{r['title']}</b>\n"
+                f"{i}. {star}{nsfw} <b>{r['title']}</b>\n"
                 f"   ✏️ /edit_{r['title_id']} │ ⭐ /feature_{r['title_id']} │ 🗑️ /delete_{r['title_id']}"
             )
     else:
