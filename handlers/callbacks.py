@@ -66,6 +66,10 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("egdone:"):
         await admin_edit.done_genres(update, context)
         return
+    if data.startswith("clrm:"):
+        from handlers.admin import clones as admin_clones
+        await admin_clones.remove_clone(update, context)
+        return
 
     # --- admin gate ---
     if data.startswith("admin:"):
@@ -105,6 +109,9 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await admin_panel.export_csv(update, context)
         elif data == "admin:settings":
             await admin_panel.settings_view(update, context)
+        elif data == "admin:clones":
+            from handlers.admin import clones as admin_clones
+            await admin_clones.clones_view(update, context)
         else:
             await q.answer()
         return

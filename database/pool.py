@@ -96,6 +96,28 @@ async def run_migrations():
         "ALTER TABLE titles ADD COLUMN IF NOT EXISTS is_approved BOOLEAN DEFAULT TRUE",
         # Soft-delete support: deleted titles keep their row so they can be restored.
         "ALTER TABLE titles ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ",
+        # Clone bots: extra bot tokens that run on this same server + DB + Mini App.
+        """CREATE TABLE IF NOT EXISTS bot_clones (
+            bot_id BIGINT PRIMARY KEY,
+            token VARCHAR(255) NOT NULL,
+            username VARCHAR(255),
+            name VARCHAR(255),
+            is_active BOOLEAN DEFAULT TRUE,
+            is_maintenance BOOLEAN DEFAULT FALSE,
+            added_by BIGINT,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        )""",
+        # Per-clone subscribers (who pressed Start on which clone) for stats/broadcast.
+        """CREATE TABLE IF NOT EXISTS bot_subscribers (
+            bot_id BIGINT NOT NULL,
+            user_id BIGINT NOT NULL,
+            first_name VARCHAR(255),
+            username VARCHAR(255),
+            first_seen TIMESTAMPTZ DEFAULT NOW(),
+            last_seen TIMESTAMPTZ DEFAULT NOW(),
+            PRIMARY KEY (bot_id, user_id)
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_bot_subscribers_bot ON bot_subscribers(bot_id)",
         """CREATE TABLE IF NOT EXISTS bot_admins (
             user_id BIGINT PRIMARY KEY,
             role VARCHAR(20) DEFAULT 'moderator',

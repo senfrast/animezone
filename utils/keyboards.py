@@ -68,6 +68,7 @@ def admin_home_kb(is_owner: bool = True, pending: int = 0):
          InlineKeyboardButton("🔥 Top Titles", callback_data="admin:top")],
         [InlineKeyboardButton("👮 Moderators", callback_data="admin:mods"),
          InlineKeyboardButton("🔗 Validate Links", callback_data="admin:validate")],
+        [InlineKeyboardButton("🤖 Clone Bots", callback_data="admin:clones")],
         [InlineKeyboardButton("💾 Backup Now", callback_data="admin:backup"),
          InlineKeyboardButton("♻️ Restore Backup", callback_data="admin:restore")],
         [InlineKeyboardButton("📤 Export CSV", callback_data="admin:export"),

@@ -302,3 +302,27 @@ CREATE TABLE IF NOT EXISTS bot_admins (
     added_by BIGINT,
     added_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- ============= CLONE BOTS (extra bot tokens on the same server/DB/Mini App) =============
+CREATE TABLE IF NOT EXISTS bot_clones (
+    bot_id BIGINT PRIMARY KEY,
+    token VARCHAR(255) NOT NULL,
+    username VARCHAR(255),
+    name VARCHAR(255),
+    is_active BOOLEAN DEFAULT TRUE,
+    is_maintenance BOOLEAN DEFAULT FALSE,
+    added_by BIGINT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS bot_subscribers (
+    bot_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    first_name VARCHAR(255),
+    username VARCHAR(255),
+    first_seen TIMESTAMPTZ DEFAULT NOW(),
+    last_seen TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (bot_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_bot_subscribers_bot ON bot_subscribers(bot_id);

@@ -15,6 +15,7 @@ from database import pool as db
 from handlers import start as start_h
 from handlers.admin import broadcast as admin_broadcast
 from handlers.admin import categories as admin_cats
+from handlers.admin import clones as admin_clones
 from handlers.admin import edit as admin_edit
 from handlers.admin import manage as admin_manage
 from handlers.admin import panel as admin_panel
@@ -40,6 +41,7 @@ def register_handlers(application):
     application.add_handler(admin_manage.build_add_mod_conv())
     application.add_handler(admin_manage.build_restore_conv())
     application.add_handler(admin_edit.build_edit_image_conv())
+    application.add_handler(admin_clones.build_add_clone_conv())
     # 5-9 commands
     application.add_handler(CommandHandler("start", start_h.start))
     application.add_handler(CommandHandler("admin", admin_panel.admin_command))
@@ -99,6 +101,14 @@ async def run():
             url=url, allowed_updates=Update.ALL_TYPES, drop_pending_updates=True
         )
         log.info("Webhook set: %s", url)
+
+    # bring any saved clone bots online (sets their webhooks; no polling loops)
+    try:
+        from services import clone_manager
+
+        await clone_manager.load_all()
+    except Exception:  # noqa: BLE001
+        log.exception("clone load failed")
 
     sched.start()
     log.info("🟢 AnimeZone started")
