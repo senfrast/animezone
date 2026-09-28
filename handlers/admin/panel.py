@@ -241,9 +241,47 @@ async def feature_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def del_title_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text or ""
     tid = text.replace("/delete_", "").strip()
-    if tid.isdigit():
-        await titles_q.delete(int(tid))
-        await update.message.reply_text(f"🗑️ Title #{tid} deleted.")
+    if not tid.isdigit():
+        return
+    name = await titles_q.delete(int(tid))
+    if name is None:
+        await update.message.reply_text(f"⚠️ Title #{tid} not found (or already in Trash).")
+        return
+    await update.message.reply_text(
+        f"🗑️ <b>{name}</b> (#{tid}) moved to Trash — it's hidden from the app "
+        f"but <b>not gone</b>.\n\n↩️ Tap /restore_{tid} to bring it back.\n"
+        f"🗂️ /trash to see everything you can restore.",
+        parse_mode="HTML",
+    )
+
+
+@owner_only
+async def restore_title_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text or ""
+    tid = text.replace("/restore_", "").strip()
+    if not tid.isdigit():
+        return
+    name = await titles_q.restore(int(tid))
+    if name is None:
+        await update.message.reply_text(f"⚠️ Title #{tid} was not in Trash.")
+        return
+    await update.message.reply_text(
+        f"✅ <b>{name}</b> (#{tid}) restored and visible in the app again.",
+        parse_mode="HTML",
+    )
+
+
+@owner_only
+async def trash_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    rows = await titles_q.list_trash()
+    if not rows:
+        await update.message.reply_text("🗂️ Trash is empty — nothing to restore. ✅")
+        return
+    lines = ["🗂️ <b>TRASH</b> — tap /restore_&lt;id&gt; to bring one back:\n"]
+    for r in rows[:50]:
+        when = r["deleted_at"].strftime("%Y-%m-%d %H:%M") if r.get("deleted_at") else ""
+        lines.append(f"• <b>{r['title']}</b> (#{r['title_id']}) · deleted {when} → /restore_{r['title_id']}")
+    await update.message.reply_text("\n".join(lines), parse_mode="HTML")
 
 
 async def pending_approvals(update: Update, context: ContextTypes.DEFAULT_TYPE):

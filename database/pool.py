@@ -94,6 +94,8 @@ async def run_migrations():
     # Idempotent patches — always safe to run, applied on every boot.
     patches = [
         "ALTER TABLE titles ADD COLUMN IF NOT EXISTS is_approved BOOLEAN DEFAULT TRUE",
+        # Soft-delete support: deleted titles keep their row so they can be restored.
+        "ALTER TABLE titles ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ",
         """CREATE TABLE IF NOT EXISTS bot_admins (
             user_id BIGINT PRIMARY KEY,
             role VARCHAR(20) DEFAULT 'moderator',

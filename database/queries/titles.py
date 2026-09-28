@@ -311,7 +311,37 @@ async def set_active(tid: int, value: bool):
 
 
 async def delete(tid: int):
+    """SOFT delete: hide the title but keep the row so it can be restored.
+    Returns the title name if a row was affected, else None."""
+    row = await db.fetchrow(
+        "UPDATE titles SET is_active=FALSE, deleted_at=NOW() "
+        "WHERE title_id=$1 AND deleted_at IS NULL RETURNING title",
+        tid,
+    )
+    return row["title"] if row else None
+
+
+async def restore(tid: int):
+    """Undo a soft delete. Returns the title name if restored, else None."""
+    row = await db.fetchrow(
+        "UPDATE titles SET is_active=TRUE, deleted_at=NULL, updated_at=NOW() "
+        "WHERE title_id=$1 AND deleted_at IS NOT NULL RETURNING title",
+        tid,
+    )
+    return row["title"] if row else None
+
+
+async def hard_delete(tid: int):
+    """Permanently remove a title (only from the Trash)."""
     await db.execute("DELETE FROM titles WHERE title_id=$1", tid)
+
+
+async def list_trash():
+    """Soft-deleted titles, newest first."""
+    return await db.fetch(
+        "SELECT title_id, title, deleted_at FROM titles "
+        "WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC"
+    )
 
 
 async def list_all(limit=50, offset=0):

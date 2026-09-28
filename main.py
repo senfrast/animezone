@@ -51,6 +51,8 @@ def register_handlers(application):
     application.add_handler(CommandHandler("feature", admin_panel.feature_command))
     application.add_handler(CommandHandler("unfeature", admin_panel.unfeature_command))
     application.add_handler(CommandHandler("delete", admin_panel.del_title_command))
+    application.add_handler(CommandHandler("restore", admin_panel.restore_title_command))
+    application.add_handler(CommandHandler("trash", admin_panel.trash_command))
     application.add_handler(CommandHandler("delcat", admin_cats.delcat_command))
     application.add_handler(CommandHandler("req_done", admin_panel.req_done_command))
     # these commands include the id suffix (e.g. /feature_12) -> use regex handler
@@ -59,6 +61,7 @@ def register_handlers(application):
     application.add_handler(MessageHandler(filters.Regex(r"^/feature_\d+"), admin_panel.feature_command))
     application.add_handler(MessageHandler(filters.Regex(r"^/unfeature_\d+"), admin_panel.unfeature_command))
     application.add_handler(MessageHandler(filters.Regex(r"^/delete_\d+"), admin_panel.del_title_command))
+    application.add_handler(MessageHandler(filters.Regex(r"^/restore_\d+"), admin_panel.restore_title_command))
     application.add_handler(MessageHandler(filters.Regex(r"^/edit_\d+"), admin_edit.edit_menu_command))
     application.add_handler(MessageHandler(filters.Regex(r"^/delcat_\d+"), admin_cats.delcat_command))
     application.add_handler(MessageHandler(filters.Regex(r"^/req_done_\d+"), admin_panel.req_done_command))
