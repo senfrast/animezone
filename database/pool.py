@@ -102,6 +102,22 @@ async def run_migrations():
             added_by BIGINT,
             added_at TIMESTAMPTZ DEFAULT NOW()
         )""",
+        # Self-healing genre set (keeps the extended genre list in sync on every boot)
+        """INSERT INTO genres (name, emoji, slug) VALUES
+            ('Action','⚔️','action'),('Adventure','🏔️','adventure'),('Comedy','😂','comedy'),
+            ('Drama','🎭','drama'),('Fantasy','✨','fantasy'),('Horror','👻','horror'),
+            ('Mystery','🔍','mystery'),('Psychological','🧠','psychological'),('Romance','💕','romance'),
+            ('Sci-Fi','🚀','sci-fi'),('Shonen','⚡','shonen'),('Slice of Life','🌸','slice-of-life'),
+            ('Sports','🏋️','sports'),('Supernatural','👹','supernatural'),('Thriller','😱','thriller'),
+            ('Isekai','🌀','isekai'),('Mecha','🤖','mecha'),('Ecchi','🔥','ecchi'),
+            ('Seinen','🕶️','seinen'),('Josei','🌷','josei'),('Shoujo','🎀','shoujo'),
+            ('Harem','💗','harem'),('Martial Arts','🥋','martial-arts'),('School','🏫','school'),
+            ('Military','🎖️','military'),('Magic','🪄','magic'),('Historical','🏛️','historical'),
+            ('Music','🎵','music'),('Demons','😈','demons'),('Vampire','🧛','vampire'),
+            ('Game','🎮','game'),('Parody','🤡','parody'),('Superhero','🦸','superhero'),
+            ('Gourmet','🍜','gourmet'),('Crime','🔫','crime'),('Cyberpunk','🌆','cyberpunk'),
+            ('Kids','🧒','kids')
+           ON CONFLICT (name) DO NOTHING""",
     ]
     async with pool.acquire() as conn:
         for stmt in patches:

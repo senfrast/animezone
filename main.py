@@ -15,6 +15,7 @@ from database import pool as db
 from handlers import start as start_h
 from handlers.admin import broadcast as admin_broadcast
 from handlers.admin import categories as admin_cats
+from handlers.admin import edit as admin_edit
 from handlers.admin import manage as admin_manage
 from handlers.admin import panel as admin_panel
 from handlers.admin import titles as admin_titles
@@ -38,6 +39,7 @@ def register_handlers(application):
     application.add_handler(admin_broadcast.build_broadcast_conv())
     application.add_handler(admin_manage.build_add_mod_conv())
     application.add_handler(admin_manage.build_restore_conv())
+    application.add_handler(admin_edit.build_edit_image_conv())
     # 5-9 commands
     application.add_handler(CommandHandler("start", start_h.start))
     application.add_handler(CommandHandler("admin", admin_panel.admin_command))
@@ -57,6 +59,7 @@ def register_handlers(application):
     application.add_handler(MessageHandler(filters.Regex(r"^/feature_\d+"), admin_panel.feature_command))
     application.add_handler(MessageHandler(filters.Regex(r"^/unfeature_\d+"), admin_panel.unfeature_command))
     application.add_handler(MessageHandler(filters.Regex(r"^/delete_\d+"), admin_panel.del_title_command))
+    application.add_handler(MessageHandler(filters.Regex(r"^/edit_\d+"), admin_edit.edit_menu_command))
     application.add_handler(MessageHandler(filters.Regex(r"^/delcat_\d+"), admin_cats.delcat_command))
     application.add_handler(MessageHandler(filters.Regex(r"^/req_done_\d+"), admin_panel.req_done_command))
     # 10 callback router LAST

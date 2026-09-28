@@ -272,6 +272,40 @@ async def get_pending_by_id(tid: int):
     return await db.fetchrow(f"{_SELECT} WHERE t.title_id=$1 AND t.is_approved=FALSE", tid)
 
 
+async def is_pending(tid: int) -> bool:
+    return bool(await db.fetchval(
+        "SELECT 1 FROM titles WHERE title_id=$1 AND is_approved=FALSE", tid))
+
+
+# ---------------- genre / image editing ----------------
+async def all_genres():
+    return await db.fetch("SELECT genre_id, name, emoji FROM genres ORDER BY name")
+
+
+async def title_genre_ids(tid: int):
+    rows = await db.fetch("SELECT genre_id FROM title_genres WHERE title_id=$1", tid)
+    return {r["genre_id"] for r in rows}
+
+
+async def add_genre(tid: int, gid: int):
+    await db.execute(
+        "INSERT INTO title_genres (title_id, genre_id) VALUES ($1,$2) ON CONFLICT DO NOTHING",
+        tid, gid,
+    )
+
+
+async def remove_genre(tid: int, gid: int):
+    await db.execute(
+        "DELETE FROM title_genres WHERE title_id=$1 AND genre_id=$2", tid, gid)
+
+
+async def set_image(tid: int, file_id: str):
+    await db.execute(
+        "UPDATE titles SET image_file_id=$1, updated_at=NOW() WHERE title_id=$2",
+        file_id, tid,
+    )
+
+
 async def set_active(tid: int, value: bool):
     await db.execute("UPDATE titles SET is_active=$1 WHERE title_id=$2", value, tid)
 

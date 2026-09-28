@@ -81,7 +81,27 @@ INSERT INTO genres (name, emoji, slug) VALUES
 ('Supernatural', '👹', 'supernatural'),
 ('Thriller', '😱', 'thriller'),
 ('Isekai', '🌀', 'isekai'),
-('Mecha', '🤖', 'mecha')
+('Mecha', '🤖', 'mecha'),
+('Ecchi', '🔥', 'ecchi'),
+('Seinen', '🕶️', 'seinen'),
+('Josei', '🌷', 'josei'),
+('Shoujo', '🎀', 'shoujo'),
+('Harem', '💗', 'harem'),
+('Martial Arts', '🥋', 'martial-arts'),
+('School', '🏫', 'school'),
+('Military', '🎖️', 'military'),
+('Magic', '🪄', 'magic'),
+('Historical', '🏛️', 'historical'),
+('Music', '🎵', 'music'),
+('Demons', '😈', 'demons'),
+('Vampire', '🧛', 'vampire'),
+('Game', '🎮', 'game'),
+('Parody', '🤡', 'parody'),
+('Superhero', '🦸', 'superhero'),
+('Gourmet', '🍜', 'gourmet'),
+('Crime', '🔫', 'crime'),
+('Cyberpunk', '🌆', 'cyberpunk'),
+('Kids', '🧒', 'kids')
 ON CONFLICT (name) DO NOTHING;
 
 -- ============= TITLES TABLE =============

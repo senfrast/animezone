@@ -7,6 +7,7 @@ from telegram.ext import ContextTypes
 import config
 from handlers import start as start_h
 from handlers.admin import categories as admin_cats
+from handlers.admin import edit as admin_edit
 from handlers.admin import manage as admin_manage
 from handlers.admin import panel as admin_panel
 from handlers.user import settings as user_settings
@@ -55,6 +56,15 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     if data.startswith("delmod:"):
         await admin_manage.remove_mod(update, context)
+        return
+    if data.startswith("egen:"):
+        await admin_edit.open_genres(update, context)
+        return
+    if data.startswith("egt:"):
+        await admin_edit.toggle_genre(update, context)
+        return
+    if data.startswith("egdone:"):
+        await admin_edit.done_genres(update, context)
         return
 
     # --- admin gate ---

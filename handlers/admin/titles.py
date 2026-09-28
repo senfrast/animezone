@@ -258,10 +258,8 @@ async def _notify_owners_pending(context, submitter, row):
         f"🔗 {row['channel_link']}\n\n"
         f"Submitted by: {who}"
     )
-    kb = InlineKeyboardMarkup([[
-        InlineKeyboardButton("✅ Approve", callback_data=f"approve:{row['title_id']}"),
-        InlineKeyboardButton("🗑️ Reject", callback_data=f"reject:{row['title_id']}"),
-    ]])
+    from handlers.admin.edit import pending_kb
+    kb = pending_kb(row["title_id"])
     for oid in config.OWNER_IDS:
         try:
             if row["image_file_id"]:

@@ -277,10 +277,8 @@ async def pending_approvals(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🔗 {r['channel_link']}\n"
             f"👤 Submitted by: {r['added_by']}"
         )
-        kb = InlineKeyboardMarkup([[
-            InlineKeyboardButton("✅ Approve", callback_data=f"approve:{r['title_id']}"),
-            InlineKeyboardButton("🗑️ Reject", callback_data=f"reject:{r['title_id']}"),
-        ]])
+        from handlers.admin.edit import pending_kb
+        kb = pending_kb(r["title_id"])
         try:
             if r["image_file_id"]:
                 await context.bot.send_photo(q.from_user.id, r["image_file_id"], caption=caption, reply_markup=kb, parse_mode="HTML")
@@ -374,7 +372,7 @@ async def titles_page(update: Update, context: ContextTypes.DEFAULT_TYPE):
             nsfw = "🔞" if r["is_nsfw"] else ""
             lines.append(
                 f"#{r['title_id']} {star}{nsfw} <b>{r['title']}</b>\n"
-                f"   feature: /feature_{r['title_id']} │ delete: /delete_{r['title_id']}"
+                f"   ✏️ /edit_{r['title_id']} │ ⭐ /feature_{r['title_id']} │ 🗑️ /delete_{r['title_id']}"
             )
     else:
         lines.append("No titles yet. Use ➕ Add New Title.")
