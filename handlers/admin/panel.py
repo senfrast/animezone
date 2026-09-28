@@ -331,15 +331,19 @@ async def approve_title(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not config.is_owner(q.from_user.id):
         await q.answer("⛔ Owner only", show_alert=True)
         return
+    # Answer the callback FIRST so the button never hangs, even if the DB
+    # round-trips to Singapore take a moment.
+    try:
+        await q.answer("⏳ Approving…")
+    except Exception:  # noqa: BLE001
+        pass
     tid = int(q.data.split(":")[1])
     pending = await titles_q.get_pending_by_id(tid)
     if not pending:
-        await q.answer("Already handled or not found", show_alert=True)
-        await _clear_markup(q)
+        await _mark_handled(q, "⚠️ Already handled or not found.")
         return
     row = await titles_q.approve(tid)
     await categories_q.refresh_count(row["category_id"])
-    await q.answer("✅ Approved & live")
     await _mark_handled(q, f"✅ APPROVED — {row['title']} is now live.")
     # notify the moderator who submitted it
     if row["added_by"]:
@@ -357,16 +361,21 @@ async def reject_title(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not config.is_owner(q.from_user.id):
         await q.answer("⛔ Owner only", show_alert=True)
         return
+    # Answer the callback FIRST so the button never hangs.
+    try:
+        await q.answer("🗑️ Rejecting…")
+    except Exception:  # noqa: BLE001
+        pass
     tid = int(q.data.split(":")[1])
     pending = await titles_q.get_pending_by_id(tid)
     if not pending:
-        await q.answer("Already handled or not found", show_alert=True)
-        await _clear_markup(q)
+        await _mark_handled(q, "⚠️ Already handled or not found.")
         return
     submitter = pending["added_by"]
     title_name = pending["title"]
-    await titles_q.delete(tid)
-    await q.answer("🗑️ Rejected & removed")
+    # A rejected submission was never live — remove it permanently so it
+    # disappears from the pending queue (soft-delete would keep it queued).
+    await titles_q.hard_delete(tid)
     await _mark_handled(q, f"🗑️ REJECTED — {title_name} was removed.")
     if submitter:
         try:

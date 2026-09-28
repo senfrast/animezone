@@ -249,13 +249,13 @@ async def create(data: dict, approved: bool = True):
 # ---------------- approval workflow ----------------
 async def list_pending():
     return await db.fetch(
-        f"{_SELECT} WHERE t.is_approved = FALSE ORDER BY t.added_at ASC"
+        f"{_SELECT} WHERE t.is_approved = FALSE AND t.deleted_at IS NULL ORDER BY t.added_at ASC"
     )
 
 
 async def count_pending():
     return await db.fetchval(
-        "SELECT COUNT(*) FROM titles WHERE is_approved = FALSE"
+        "SELECT COUNT(*) FROM titles WHERE is_approved = FALSE AND deleted_at IS NULL"
     ) or 0
 
 
@@ -269,12 +269,13 @@ async def approve(tid: int):
 
 
 async def get_pending_by_id(tid: int):
-    return await db.fetchrow(f"{_SELECT} WHERE t.title_id=$1 AND t.is_approved=FALSE", tid)
+    return await db.fetchrow(
+        f"{_SELECT} WHERE t.title_id=$1 AND t.is_approved=FALSE AND t.deleted_at IS NULL", tid)
 
 
 async def is_pending(tid: int) -> bool:
     return bool(await db.fetchval(
-        "SELECT 1 FROM titles WHERE title_id=$1 AND is_approved=FALSE", tid))
+        "SELECT 1 FROM titles WHERE title_id=$1 AND is_approved=FALSE AND deleted_at IS NULL", tid))
 
 
 # ---------------- genre / image editing ----------------
