@@ -17,18 +17,46 @@ from telegram import (
 import config
 from database.queries import analytics as analytics_q
 from database.queries import clones as clones_q
+from database.queries import settings as settings_q
+from database.queries import users as users_q
 from services import broadcast_engine, clone_manager
+from utils import keyboards
 
 log = logging.getLogger("clone.dispatch")
 
 # (bot_id, owner_id) currently typing a broadcast message
 _awaiting_broadcast: set[tuple[int, int]] = set()
 
+WELCOME_TEXT = (
+    "🎌 <b>Welcome to AnimeZone!</b>\n\n"
+    "Browse thousands of anime, movies and web series — all in one place.\n\n"
+    "Tap a button below 👇"
+)
 
-def _open_app_kb():
+HELP_TEXT = (
+    "❓ <b>How to use AnimeZone</b>\n\n"
+    "1️⃣ Tap <b>Open AnimeZone</b> to launch the app.\n"
+    "2️⃣ Browse Anime, Movies & Web Series.\n"
+    "3️⃣ Tap a title → <b>Join Channel</b> to get content.\n"
+    "4️⃣ Save favourites with the bookmark icon.\n"
+    "5️⃣ Use <b>Settings</b> to toggle 18+ content & notifications.\n\n"
+    "Enjoy! 🎌"
+)
+
+
+def _welcome_kb():
     return InlineKeyboardMarkup(
-        [[InlineKeyboardButton("🎬 Open AnimeZone", web_app=WebAppInfo(url=config.MINI_APP_URL))]]
+        [
+            [InlineKeyboardButton("🎬 Open AnimeZone", web_app=WebAppInfo(url=config.MINI_APP_URL))],
+            [InlineKeyboardButton("⚙️ Settings", callback_data="usettings"),
+             InlineKeyboardButton("❓ Help", callback_data="help")],
+        ]
     )
+
+
+# backward-compat alias
+def _open_app_kb():
+    return _welcome_kb()
 
 
 def _panel_kb(bot_id: int):
@@ -89,19 +117,29 @@ async def _on_message(bot, bot_id: int, update: Update):
         return
 
     if text.startswith("/start"):
+        # keep the shared users table in sync so Settings works everywhere
+        try:
+            await users_q.upsert_user(
+                {"id": uid, "username": user.username, "first_name": user.first_name}
+            )
+        except Exception:  # noqa: BLE001
+            pass
         if is_owner:
             await _send_panel(bot, bot_id, uid)
         elif clone_manager.is_maintenance(bot_id):
             await bot.send_message(uid, "🔧 This bot is under maintenance. Please check back soon!")
         else:
             await bot.send_message(
-                uid,
-                "🎌 <b>Welcome to AnimeZone!</b>\n\n"
-                "Browse thousands of anime, movies and web series — all in one place.\n\n"
-                "Tap below to start exploring 👇",
-                reply_markup=_open_app_kb(),
-                parse_mode="HTML",
+                uid, WELCOME_TEXT, reply_markup=_welcome_kb(), parse_mode="HTML"
             )
+        return
+
+    if text.startswith("/settings"):
+        await _show_settings(bot, user)
+        return
+
+    if text.startswith("/help"):
+        await bot.send_message(uid, HELP_TEXT, parse_mode="HTML")
         return
 
     if text.startswith("/panel") or text.startswith("/admin"):
@@ -111,7 +149,88 @@ async def _on_message(bot, bot_id: int, update: Update):
 
     # Any other message from a normal user -> nudge them to open the app.
     if not is_owner and not clone_manager.is_maintenance(bot_id):
-        await bot.send_message(uid, "Tap below to open AnimeZone 👇", reply_markup=_open_app_kb())
+        await bot.send_message(uid, "Tap a button below 👇", reply_markup=_welcome_kb())
+
+
+# ---------------- user-facing settings/help (any user) ----------------
+async def _show_settings(bot, user, message_id: int | None = None):
+    uid = user.id
+    row = await users_q.get_user(uid)
+    if row is None:
+        row = await users_q.upsert_user(
+            {"id": uid, "username": getattr(user, "username", None),
+             "first_name": getattr(user, "first_name", None)}
+        )
+    text = (
+        "⚙️ <b>SETTINGS</b>\n\n"
+        "━━━ CONTENT ━━━━━━━━━━━━\n"
+        f"🔞 18+ Content: {'🟢 ON' if row['show_nsfw'] else '🔴 OFF'}\n\n"
+        f"🔔 Notifications: {'🟢 ON' if row['notifications_enabled'] else '🔴 OFF'}"
+    )
+    kb = keyboards.user_settings_kb(row["show_nsfw"], row["notifications_enabled"])
+    if message_id is not None:
+        try:
+            await bot.edit_message_text(chat_id=uid, message_id=message_id, text=text,
+                                        reply_markup=kb, parse_mode="HTML")
+            return
+        except Exception:  # noqa: BLE001
+            pass
+    await bot.send_message(uid, text, reply_markup=kb, parse_mode="HTML")
+
+
+async def _user_callback(bot, cq, data: str) -> bool:
+    """Handle callbacks available to every user. Returns True if handled."""
+    user = cq.from_user
+    uid = user.id
+    mid = cq.message.message_id if cq.message else None
+
+    if data == "help":
+        await bot.answer_callback_query(cq.id)
+        await bot.send_message(uid, HELP_TEXT, parse_mode="HTML")
+        return True
+    if data == "start":
+        await bot.answer_callback_query(cq.id)
+        try:
+            await bot.edit_message_text(chat_id=uid, message_id=mid, text=WELCOME_TEXT,
+                                        reply_markup=_welcome_kb(), parse_mode="HTML")
+        except Exception:  # noqa: BLE001
+            await bot.send_message(uid, WELCOME_TEXT, reply_markup=_welcome_kb(), parse_mode="HTML")
+        return True
+    if data == "usettings":
+        await bot.answer_callback_query(cq.id)
+        await _show_settings(bot, user, mid)
+        return True
+    if data == "uset:nsfw":
+        row = await users_q.get_user(uid)
+        if row and row["show_nsfw"]:
+            await users_q.set_nsfw(uid, False)
+            await bot.answer_callback_query(cq.id)
+            await _show_settings(bot, user, mid)
+        else:
+            await bot.answer_callback_query(cq.id)
+            warning = await settings_q.get(
+                "nsfw_warning_text",
+                "⚠️ AGE VERIFICATION\n\nThis will show 18+ content.\n\nBy enabling, you confirm you are 18+.",
+            )
+            try:
+                await bot.edit_message_text(chat_id=uid, message_id=mid, text=warning,
+                                            reply_markup=keyboards.nsfw_confirm_kb())
+            except Exception:  # noqa: BLE001
+                await bot.send_message(uid, warning, reply_markup=keyboards.nsfw_confirm_kb())
+        return True
+    if data == "uset:nsfw_yes":
+        await users_q.set_nsfw(uid, True)
+        await bot.answer_callback_query(cq.id, "18+ content enabled")
+        await _show_settings(bot, user, mid)
+        return True
+    if data == "uset:notif":
+        row = await users_q.get_user(uid)
+        newval = not (row and row["notifications_enabled"])
+        await users_q.set_notifications(uid, newval)
+        await bot.answer_callback_query(cq.id)
+        await _show_settings(bot, user, mid)
+        return True
+    return False
 
 
 async def _on_callback(bot, bot_id: int, update: Update):
@@ -119,6 +238,11 @@ async def _on_callback(bot, bot_id: int, update: Update):
     uid = cq.from_user.id
     data = cq.data or ""
 
+    # user-facing settings/help work for everyone
+    if await _user_callback(bot, cq, data):
+        return
+
+    # everything below (clone admin panel) is owner-only
     if not config.is_owner(uid):
         await bot.answer_callback_query(cq.id, "⛔ Owner only", show_alert=True)
         return

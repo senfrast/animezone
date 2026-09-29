@@ -41,3 +41,21 @@ def validate_init_data(init_data: str, bot_token: str = None, max_age: int = 864
     if not user_raw:
         raise ValueError("no user in init data")
     return json.loads(user_raw)
+
+
+def validate_init_data_multi(init_data: str, tokens, max_age: int = 86400) -> dict:
+    """Validate initData against several bot tokens (main bot + clones).
+
+    The Mini App is shared by the main bot and every clone. Each bot signs its
+    initData with its OWN token, so we accept the request if ANY known token
+    verifies it. Returns the parsed user on the first match.
+    """
+    last_err = None
+    for t in tokens:
+        if not t:
+            continue
+        try:
+            return validate_init_data(init_data, bot_token=t, max_age=max_age)
+        except ValueError as e:
+            last_err = e
+    raise last_err or ValueError("invalid init data")

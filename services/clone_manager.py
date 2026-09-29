@@ -126,3 +126,8 @@ def get_clone(bot_id: int):
 def is_maintenance(bot_id: int) -> bool:
     c = _clones.get(bot_id)
     return bool(c and c.get("is_maintenance"))
+
+
+def all_tokens() -> list[str]:
+    """Tokens of every loaded clone (used to validate Mini App initData)."""
+    return [c["token"] for c in _clones.values() if c.get("token")]

@@ -6,7 +6,7 @@ import time
 from aiohttp import web
 
 import config
-from api.auth import validate_init_data
+from api.auth import validate_init_data_multi
 from database.queries import users as users_q
 
 log = logging.getLogger("api")
@@ -49,8 +49,12 @@ async def api_middleware(request: web.Request, handler):
             return web.HTTPFound("/assets/placeholder.svg")
 
     init_data = request.headers.get("X-Telegram-Init-Data", "")
+    # Accept initData signed by the main bot OR any clone bot (shared Mini App).
+    from services import clone_manager
+
+    tokens = [config.BOT_TOKEN, *clone_manager.all_tokens()]
     try:
-        tg_user = validate_init_data(init_data)
+        tg_user = validate_init_data_multi(init_data, tokens)
     except Exception as e:  # noqa: BLE001
         return json_response({"error": "unauthorized", "detail": str(e)}, status=401)
 
