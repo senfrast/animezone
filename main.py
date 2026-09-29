@@ -13,6 +13,7 @@ from telegram.ext import (
 import config
 from database import pool as db
 from handlers import start as start_h
+from handlers.admin import backup_vault as admin_vault
 from handlers.admin import broadcast as admin_broadcast
 from handlers.admin import categories as admin_cats
 from handlers.admin import clones as admin_clones
@@ -49,6 +50,7 @@ def register_handlers(application):
     application.add_handler(CommandHandler("settings", user_settings.settings_command))
     application.add_handler(CommandHandler("cancel", start_h.cancel))
     application.add_handler(CommandHandler("set", admin_panel.set_command))
+    application.add_handler(CommandHandler("setbackup", admin_vault.set_backup_command))
     # dynamic slash-commands (feature/delete/etc.)
     application.add_handler(CommandHandler("feature", admin_panel.feature_command))
     application.add_handler(CommandHandler("unfeature", admin_panel.unfeature_command))
@@ -67,6 +69,8 @@ def register_handlers(application):
     application.add_handler(MessageHandler(filters.Regex(r"^/edit_\d+"), admin_edit.edit_menu_command))
     application.add_handler(MessageHandler(filters.Regex(r"^/delcat_\d+"), admin_cats.delcat_command))
     application.add_handler(MessageHandler(filters.Regex(r"^/req_done_\d+"), admin_panel.req_done_command))
+    # forwarded message from a channel -> register it as the backup vault
+    application.add_handler(MessageHandler(filters.FORWARDED, admin_vault.on_forwarded))
     # 10 callback router LAST
     application.add_handler(CallbackQueryHandler(callback_router))
 

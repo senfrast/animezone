@@ -70,6 +70,23 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from handlers.admin import clones as admin_clones
         await admin_clones.remove_clone(update, context)
         return
+    if data.startswith("bkv:"):
+        from handlers.admin import backup_vault as admin_vault
+        if not config.is_owner(q.from_user.id):
+            await q.answer("⛔ Owner only", show_alert=True)
+            return
+        action = data.split(":", 1)[1]
+        if action == "json":
+            await admin_vault.backup_json(update, context)
+        elif action == "covers":
+            await admin_vault.archive_covers(update, context)
+        elif action == "help":
+            await admin_vault.help_view(update, context)
+        elif action == "clear":
+            await admin_vault.clear_channel(update, context)
+        else:
+            await q.answer()
+        return
 
     # --- admin gate ---
     if data.startswith("admin:"):
@@ -112,6 +129,9 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif data == "admin:clones":
             from handlers.admin import clones as admin_clones
             await admin_clones.clones_view(update, context)
+        elif data == "admin:vault":
+            from handlers.admin import backup_vault as admin_vault
+            await admin_vault.vault_view(update, context)
         else:
             await q.answer()
         return

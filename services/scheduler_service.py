@@ -46,15 +46,15 @@ def build_scheduler(bot) -> AsyncIOScheduler:
             log.exception("count refresh failed")
 
     async def job_daily_backup():
-        """DM every owner a full JSON backup so data survives even if the DB is lost."""
-        if not config.OWNER_IDS:
-            return
+        """DM every owner a full JSON backup AND post it to the backup channel
+        (if connected), so data survives even if the DB is lost."""
         try:
             buf, fname, counts = await backup_service.backup_bytes()
             raw = buf.getvalue()
+            import io as _io
+
             for oid in config.OWNER_IDS:
                 try:
-                    import io as _io
                     await bot.send_document(
                         chat_id=oid, document=_io.BytesIO(raw), filename=fname,
                         caption=(f"🗄️ <b>Daily automatic backup</b>\n{counts['titles']} titles · "
@@ -64,6 +64,20 @@ def build_scheduler(bot) -> AsyncIOScheduler:
                     )
                 except Exception:  # noqa: BLE001
                     pass
+
+            # also post to the backup channel if one is connected
+            try:
+                from database.queries import settings as settings_q
+
+                ch = await settings_q.get("backup_channel_id") or config.BACKUP_CHANNEL_ID
+                if ch:
+                    await bot.send_document(
+                        chat_id=ch, document=_io.BytesIO(raw), filename=fname,
+                        caption=(f"🗄️ Daily automatic backup\n{counts['titles']} titles · "
+                                 f"{counts['categories']} categories · {counts['genres']} genres."),
+                    )
+            except Exception:  # noqa: BLE001
+                log.exception("channel daily backup failed")
         except Exception:  # noqa: BLE001
             log.exception("daily backup failed")
 

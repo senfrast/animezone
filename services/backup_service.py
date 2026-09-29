@@ -15,6 +15,7 @@ import datetime
 import io
 import json
 import logging
+import asyncio
 
 from database import pool as db
 
@@ -162,3 +163,46 @@ async def restore_from(data: dict) -> dict:
            (SELECT COUNT(*) FROM titles t WHERE t.category_id=c.category_id AND t.is_active=TRUE)"""
     )
     return added
+
+
+# ---------------- Telegram channel "backup vault" ----------------
+async def send_json_to_channel(bot, chat_id) -> dict:
+    """Post the full DB JSON backup as a document to a private channel."""
+    buf, fname, counts = await backup_bytes()
+    caption = (
+        f"🗄️ AnimeZone database backup\n"
+        f"{counts['titles']} titles · {counts['categories']} categories · {counts['genres']} genres\n"
+        f"{datetime.datetime.now().strftime('%Y-%m-%d %H:%M')} IST\n"
+        f"Restore via Admin → ♻️ Restore Backup (forward this file to the bot)."
+    )
+    await bot.send_document(chat_id=chat_id, document=buf, filename=fname, caption=caption)
+    return counts
+
+
+async def archive_covers_to_channel(bot, chat_id, progress=None) -> dict:
+    """Post every cover image to the channel so the actual image bytes are
+    stored safely (survives a bot-token change, unlike a bare file_id)."""
+    rows = await db.fetch(
+        "SELECT title_id, title, slug, image_file_id FROM titles "
+        "WHERE image_file_id IS NOT NULL AND deleted_at IS NULL ORDER BY title_id"
+    )
+    total = len(rows)
+    sent = failed = 0
+    await bot.send_message(
+        chat_id,
+        f"🖼️ Cover archive — {total} images — {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')} IST",
+    )
+    for i, r in enumerate(rows, 1):
+        try:
+            await bot.send_photo(
+                chat_id=chat_id, photo=r["image_file_id"],
+                caption=f"#{r['title_id']} {r['title']}\nslug: {r['slug']}",
+            )
+            sent += 1
+        except Exception:  # noqa: BLE001
+            failed += 1
+        if i % 15 == 0:
+            await asyncio.sleep(1.0)
+            if progress:
+                await progress(i, total, sent, failed)
+    return {"total": total, "sent": sent, "failed": failed}

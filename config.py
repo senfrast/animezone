@@ -36,6 +36,10 @@ WEBHOOK_URL = os.getenv("WEBHOOK_URL", "").rstrip("/")
 MINI_APP_URL = os.getenv("MINI_APP_URL", WEBHOOK_URL).rstrip("/")
 USE_WEBHOOK = os.getenv("USE_WEBHOOK", "true").lower() == "true"
 
+# Optional fallback for the backup channel (owner can also set it from the panel,
+# which is stored in platform_settings and takes precedence).
+BACKUP_CHANNEL_ID = os.getenv("BACKUP_CHANNEL_ID", "")
+
 WEBHOOK_PATH = "/webhook"
 API_PREFIX = "/api/v1"
 
