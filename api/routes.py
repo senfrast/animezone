@@ -35,6 +35,7 @@ async def init(request):
     bm_ids = await bookmarks_q.user_bookmark_ids(user_id)
 
     return json_response({
+        "bot_username": request.get("bot_username", config.BOT_USERNAME),
         "user": {
             "user_id": row["user_id"],
             "first_name": row["first_name"],

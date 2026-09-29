@@ -15,6 +15,7 @@ window.App = (function () {
       state.config = data.config;
       state.categories = data.categories;
       state.bookmarkIds = data.bookmark_ids || [];
+      if (data.bot_username) state.botUsername = data.bot_username;
     } catch (e) {
       console.error('init failed', e);
     }
@@ -41,6 +42,7 @@ window.App = (function () {
     state.config = initData.config;
     state.categories = initData.categories;
     state.bookmarkIds = initData.bookmark_ids || [];
+    if (initData.bot_username) state.botUsername = initData.bot_username;
 
     // maintenance
     if (state.config.maintenance_mode) {

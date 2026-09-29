@@ -131,3 +131,9 @@ def is_maintenance(bot_id: int) -> bool:
 def all_tokens() -> list[str]:
     """Tokens of every loaded clone (used to validate Mini App initData)."""
     return [c["token"] for c in _clones.values() if c.get("token")]
+
+
+def token_username_pairs() -> list[tuple]:
+    """(token, username) for each loaded clone — lets the API identify which
+    bot opened the Mini App so share links use the correct @username."""
+    return [(c["token"], c.get("username")) for c in _clones.values() if c.get("token")]

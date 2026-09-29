@@ -6,7 +6,7 @@ import time
 from aiohttp import web
 
 import config
-from api.auth import validate_init_data_multi
+from api.auth import validate_init_data
 from database.queries import users as users_q
 
 log = logging.getLogger("api")
@@ -49,14 +49,27 @@ async def api_middleware(request: web.Request, handler):
             return web.HTTPFound("/assets/placeholder.svg")
 
     init_data = request.headers.get("X-Telegram-Init-Data", "")
-    # Accept initData signed by the main bot OR any clone bot (shared Mini App).
+    # Accept initData signed by the main bot OR any clone bot (shared Mini App),
+    # and remember WHICH bot opened it so share links use the right username.
     from services import clone_manager
 
-    tokens = [config.BOT_TOKEN, *clone_manager.all_tokens()]
-    try:
-        tg_user = validate_init_data_multi(init_data, tokens)
-    except Exception as e:  # noqa: BLE001
-        return json_response({"error": "unauthorized", "detail": str(e)}, status=401)
+    candidates = [(config.BOT_TOKEN, config.BOT_USERNAME), *clone_manager.token_username_pairs()]
+    tg_user = None
+    bot_username = config.BOT_USERNAME
+    last_err = "invalid init data"
+    for tok, uname in candidates:
+        if not tok:
+            continue
+        try:
+            tg_user = validate_init_data(init_data, bot_token=tok)
+            bot_username = uname or config.BOT_USERNAME
+            break
+        except Exception as e:  # noqa: BLE001
+            last_err = str(e)
+            continue
+    if tg_user is None:
+        return json_response({"error": "unauthorized", "detail": last_err}, status=401)
+    request["bot_username"] = bot_username
 
     user_id = tg_user.get("id")
     if not user_id:

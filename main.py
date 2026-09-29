@@ -92,6 +92,14 @@ async def run():
     await application.initialize()
     await application.start()
 
+    # Resolve the main bot's real @username so Mini App share links are correct.
+    try:
+        me = await application.bot.get_me()
+        if me.username:
+            config.BOT_USERNAME = me.username
+    except Exception:  # noqa: BLE001
+        log.exception("get_me failed")
+
     # scheduler
     sched = scheduler_service.build_scheduler(application.bot)
 
