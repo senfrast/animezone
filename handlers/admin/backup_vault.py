@@ -30,8 +30,9 @@ async def _channel_id():
 def _vault_kb(has_channel: bool):
     rows = []
     if has_channel:
-        rows.append([InlineKeyboardButton("📤 Backup DB to Channel now", callback_data="bkv:json")])
-        rows.append([InlineKeyboardButton("🖼️ Archive all covers to Channel", callback_data="bkv:covers")])
+        rows.append([InlineKeyboardButton("📦 Full Backup to Channel (data + images)", callback_data="bkv:full")])
+        rows.append([InlineKeyboardButton("♻️ One-Click Restore from Channel", callback_data="bkv:restore")])
+        rows.append([InlineKeyboardButton("📤 Quick backup (data only)", callback_data="bkv:json")])
         rows.append([InlineKeyboardButton("🔌 Disconnect channel", callback_data="bkv:clear")])
     rows.append([InlineKeyboardButton("ℹ️ How to connect a channel", callback_data="bkv:help")])
     rows.append([InlineKeyboardButton("🔙 Back to Panel", callback_data="admin:home")])
@@ -52,9 +53,10 @@ async def vault_view(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.edit_message_text(
         "🗄️ <b>BACKUP VAULT</b>\n\n"
         f"{status}\n\n"
-        "A private channel becomes a permanent, free backup store: the full database "
-        "(titles, categories, genres, settings) is posted as a JSON file, and you can "
-        "archive every cover image too.",
+        "<b>📦 Full Backup</b> posts every cover image plus a self-contained JSON of the whole "
+        "database, and <b>pins</b> it.\n"
+        "<b>♻️ One-Click Restore</b> finds that pinned backup automatically and rebuilds everything — "
+        "titles, categories, genres, settings and cover images.",
         reply_markup=_vault_kb(bool(ch)),
         parse_mode="HTML",
     )
@@ -97,6 +99,88 @@ async def backup_json(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.edit_message_text(
             f"❌ Couldn't post to the channel: {e}\n\n"
             "Make sure the bot is an admin of the channel and can post messages.",
+            reply_markup=keyboards.back_admin_kb("admin:vault"),
+        )
+
+
+async def full_backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer("Starting full backup…")
+    if not config.is_owner(q.from_user.id):
+        return
+    ch = await _channel_id()
+    if not ch:
+        await q.answer("No channel connected", show_alert=True)
+        return
+    status = await q.edit_message_text("📦 Full backup in progress — posting covers + database…")
+
+    async def progress(i, total, sent, failed):
+        try:
+            await status.edit_text(f"📦 Archiving covers {i}/{total} — done {sent}, failed {failed}")
+        except Exception:  # noqa: BLE001
+            pass
+
+    try:
+        c = await backup_service.full_backup_to_channel(context.bot, ch, progress)
+        await status.edit_text(
+            "✅ <b>Full backup complete & pinned.</b>\n"
+            f"• {c['titles']} titles · {c['categories']} categories · {c['genres']} genres\n"
+            f"• {c.get('images', 0)}/{c.get('images_total', 0)} cover images archived\n\n"
+            "You can now rebuild everything anytime with One-Click Restore.",
+            reply_markup=keyboards.back_admin_kb("admin:vault"), parse_mode="HTML",
+        )
+    except Exception as e:  # noqa: BLE001
+        log.exception("full backup failed")
+        await status.edit_text(
+            f"❌ Full backup failed: {e}\n\nEnsure the bot is a channel admin with post & pin rights.",
+            reply_markup=keyboards.back_admin_kb("admin:vault"),
+        )
+
+
+async def restore_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    if not config.is_owner(q.from_user.id):
+        return
+    await q.edit_message_text(
+        "♻️ <b>One-Click Restore from Channel</b>\n\n"
+        "I'll fetch the latest pinned backup from your channel and restore everything "
+        "that's missing (titles, categories, genres, settings, cover images).\n\n"
+        "This is <b>safe & idempotent</b> — existing items are kept, nothing is duplicated "
+        "or deleted. Proceed?",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("✅ Yes, restore now", callback_data="bkv:restore_yes")],
+            [InlineKeyboardButton("🔙 Cancel", callback_data="admin:vault")],
+        ]),
+        parse_mode="HTML",
+    )
+
+
+async def restore_run(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer("Restoring…")
+    if not config.is_owner(q.from_user.id):
+        return
+    ch = await _channel_id()
+    if not ch:
+        await q.answer("No channel connected", show_alert=True)
+        return
+    status = await q.edit_message_text("♻️ Fetching the latest backup and restoring…")
+    try:
+        from utils import roles
+        added = await backup_service.restore_from_channel(context.bot, ch)
+        await roles.refresh()
+        await status.edit_text(
+            "✅ <b>Restore complete.</b>\n"
+            f"Added: {added['titles']} titles, {added['categories']} categories, "
+            f"{added['genres']} genres, {added['moderators']} moderators.\n\n"
+            "Cover images were restored from the backup file IDs.",
+            reply_markup=keyboards.back_admin_kb("admin:vault"), parse_mode="HTML",
+        )
+    except Exception as e:  # noqa: BLE001
+        log.exception("channel restore failed")
+        await status.edit_text(
+            f"❌ Restore failed: {e}",
             reply_markup=keyboards.back_admin_kb("admin:vault"),
         )
 

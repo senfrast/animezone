@@ -18,6 +18,7 @@ import config
 from database.queries import analytics as analytics_q
 from database.queries import clones as clones_q
 from database.queries import settings as settings_q
+from database.queries import titles as titles_q
 from database.queries import users as users_q
 from services import broadcast_engine, clone_manager
 from utils import keyboards
@@ -57,6 +58,18 @@ def _welcome_kb():
 # backward-compat alias
 def _open_app_kb():
     return _welcome_kb()
+
+
+def _title_kb(slug: str):
+    """Keyboard for a shared/deep-linked title — opens that exact title."""
+    url = f"{config.MINI_APP_URL}#/title/{slug}"
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("🎬 Open This Title", web_app=WebAppInfo(url=url))],
+            [InlineKeyboardButton("⚙️ Settings", callback_data="usettings"),
+             InlineKeyboardButton("❓ Help", callback_data="help")],
+        ]
+    )
 
 
 def _panel_kb(bot_id: int):
@@ -124,6 +137,20 @@ async def _on_message(bot, bot_id: int, update: Update):
             )
         except Exception:  # noqa: BLE001
             pass
+        # deep link: /start title_<slug>  ->  open that exact title
+        parts = text.split(maxsplit=1)
+        deep_slug = None
+        if len(parts) > 1 and parts[1].strip().startswith("title_"):
+            deep_slug = parts[1].strip()[len("title_"):]
+        if deep_slug and not clone_manager.is_maintenance(bot_id):
+            row = await titles_q.get_by_slug(deep_slug)
+            if row:
+                await bot.send_message(
+                    uid,
+                    f"🎬 <b>{row['title']}</b>\n\nTap below to open it in AnimeZone 👇",
+                    reply_markup=_title_kb(deep_slug), parse_mode="HTML",
+                )
+                return
         if is_owner:
             await _send_panel(bot, bot_id, uid)
         elif clone_manager.is_maintenance(bot_id):

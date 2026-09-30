@@ -76,7 +76,13 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.answer("⛔ Owner only", show_alert=True)
             return
         action = data.split(":", 1)[1]
-        if action == "json":
+        if action == "full":
+            await admin_vault.full_backup(update, context)
+        elif action == "restore":
+            await admin_vault.restore_prompt(update, context)
+        elif action == "restore_yes":
+            await admin_vault.restore_run(update, context)
+        elif action == "json":
             await admin_vault.backup_json(update, context)
         elif action == "covers":
             await admin_vault.archive_covers(update, context)

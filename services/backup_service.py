@@ -167,16 +167,78 @@ async def restore_from(data: dict) -> dict:
 
 # ---------------- Telegram channel "backup vault" ----------------
 async def send_json_to_channel(bot, chat_id) -> dict:
-    """Post the full DB JSON backup as a document to a private channel."""
+    """Post the full DB JSON backup as a document, PIN it so it can be found
+    automatically for one-click restore, and remember its ids."""
+    from database.queries import settings as settings_q
+
     buf, fname, counts = await backup_bytes()
     caption = (
-        f"🗄️ AnimeZone database backup\n"
+        f"🗄️ AnimeZone FULL backup (auto-restorable)\n"
         f"{counts['titles']} titles · {counts['categories']} categories · {counts['genres']} genres\n"
-        f"{datetime.datetime.now().strftime('%Y-%m-%d %H:%M')} IST\n"
-        f"Restore via Admin → ♻️ Restore Backup (forward this file to the bot)."
+        f"{datetime.datetime.now().strftime('%Y-%m-%d %H:%M')} IST"
     )
-    await bot.send_document(chat_id=chat_id, document=buf, filename=fname, caption=caption)
+    msg = await bot.send_document(chat_id=chat_id, document=buf, filename=fname, caption=caption)
+    # Pin it: this is how one-click restore finds the latest backup even if the
+    # database (and its settings) were completely wiped.
+    try:
+        await bot.pin_chat_message(chat_id, msg.message_id, disable_notification=True)
+    except Exception:  # noqa: BLE001
+        log.warning("could not pin backup (grant the bot 'Pin Messages' admin right)")
+    try:
+        await settings_q.set("last_backup_file_id", msg.document.file_id)
+        await settings_q.set("last_backup_msg_id", str(msg.message_id))
+    except Exception:  # noqa: BLE001
+        pass
     return counts
+
+
+async def full_backup_to_channel(bot, chat_id, progress=None) -> dict:
+    """Back up EVERYTHING to the channel: the cover images first, then the
+    self-contained JSON (which references every image by file_id) — pinned for
+    one-click restore."""
+    img = await archive_covers_to_channel(bot, chat_id, progress)
+    counts = await send_json_to_channel(bot, chat_id)
+    counts = dict(counts)
+    counts["images"] = img["sent"]
+    counts["images_total"] = img["total"]
+    return counts
+
+
+async def _download_json(bot, file_id) -> dict:
+    f = await bot.get_file(file_id)
+    raw = await f.download_as_bytearray()
+    return json.loads(bytes(raw).decode("utf-8"))
+
+
+async def restore_from_channel(bot, chat_id) -> dict:
+    """One-click restore: locate the latest backup JSON in the channel and
+    restore it automatically. Tries the remembered file_id first (fast path),
+    then the channel's PINNED message (survives a full DB wipe)."""
+    from database.queries import settings as settings_q
+
+    data = None
+    # fast path: file_id we saved when we posted the last backup
+    fid = await settings_q.get("last_backup_file_id")
+    if fid:
+        try:
+            data = await _download_json(bot, fid)
+        except Exception:  # noqa: BLE001
+            data = None
+    # durable path: the pinned message in the channel
+    if data is None:
+        chat = await bot.get_chat(chat_id)
+        pinned = getattr(chat, "pinned_message", None)
+        if pinned is None or pinned.document is None:
+            raise ValueError(
+                "No backup found in the channel. Post a Full Backup first, and make "
+                "sure the backup message is pinned."
+            )
+        data = await _download_json(bot, pinned.document.file_id)
+    if not isinstance(data, dict) or "titles" not in data:
+        raise ValueError("The pinned/last file isn't a valid AnimeZone backup.")
+    added = await restore_from(data)
+    added["source_counts"] = data.get("counts", {})
+    return added
 
 
 async def archive_covers_to_channel(bot, chat_id, progress=None) -> dict:
