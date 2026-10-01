@@ -37,12 +37,20 @@
 .nav-icon { width: 24px; height: 24px; transition: transform var(--transition-fast); }
 
 /* ===== TITLE CARD ===== */
-.title-card { flex-shrink: 0; width: 130px; scroll-snap-align: start; cursor: pointer; }
-.title-card-image-wrap { position: relative; width: 130px; height: 185px; }
+.title-card { flex-shrink: 0; width: 188px; scroll-snap-align: start; cursor: pointer; }
+/* 16:9 tiles — matches the featured banner and the artwork people actually upload */
+.title-card-image-wrap {
+    position: relative; width: 100%; aspect-ratio: 16 / 9;
+    border-radius: var(--card-radius); overflow: hidden; background: var(--bg-secondary);
+}
+/* blurred fill so a stray portrait poster letterboxes nicely instead of being cut */
+.card-image-bg {
+    position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; object-fit: cover;
+    filter: blur(16px) saturate(1.4) brightness(0.6); transform: scale(1.2);
+}
 .title-card-image {
-    width: 130px; height: 185px; border-radius: var(--card-radius);
-    object-fit: cover; background: var(--bg-secondary);
-    transition: transform var(--transition-fast);
+    position: relative; z-index: 1; display: block; width: 100%; height: 100%;
+    object-fit: contain; transition: transform var(--transition-fast);
 }
 .title-card:active .title-card-image { transform: scale(0.96); }
 .title-card-badge {
@@ -61,8 +69,7 @@
 /* ===== GRID CARD ===== */
 .grid-card { width: calc(50% - 6px); cursor: pointer; }
 .grid-card-image {
-    width: 100%; aspect-ratio: 2/3; border-radius: var(--card-radius);
-    object-fit: cover; background: var(--bg-secondary);
+    position: relative; z-index: 1; display: block; width: 100%; height: 100%; object-fit: contain;
 }
 
 /* ===== HERO BANNER ===== */

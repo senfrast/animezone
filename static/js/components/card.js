@@ -5,6 +5,7 @@ window.Card = (function () {
     const nsfw = t.is_nsfw ? `<div class="title-card-nsfw">18+</div>` : '';
     card.innerHTML =
       `<div class="title-card-image-wrap">
+         <img class="card-image-bg" loading="lazy" aria-hidden="true" src="${t.image_url}" onerror="this.remove()">
          <img class="title-card-image img-blur" loading="lazy" src="${t.image_url}" onload="this.classList.add('img-clear')" onerror="this.src='/assets/placeholder.svg'">
          ${badge}${nsfw}
        </div>
@@ -19,6 +20,7 @@ window.Card = (function () {
     const nsfw = t.is_nsfw ? `<div class="title-card-nsfw">18+</div>` : '';
     card.innerHTML =
       `<div class="title-card-image-wrap">
+         <img class="card-image-bg" loading="lazy" aria-hidden="true" src="${t.image_url}" onerror="this.remove()">
          <img class="grid-card-image img-blur" loading="lazy" src="${t.image_url}" onload="this.classList.add('img-clear')" onerror="this.src='/assets/placeholder.svg'">
          ${nsfw}
        </div>

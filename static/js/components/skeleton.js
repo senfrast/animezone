@@ -2,7 +2,7 @@ window.Skeleton = (function () {
   function cards(n = 6) {
     let h = '<div class="horizontal-scroll">';
     for (let i = 0; i < n; i++) {
-      h += '<div class="title-card"><div class="skeleton-box" style="width:130px;height:185px"></div>' +
+      h += '<div class="title-card"><div class="skeleton-box" style="width:100%;aspect-ratio:16/9"></div>' +
         '<div class="skeleton-box" style="width:100px;height:12px;margin-top:8px"></div></div>';
     }
     h += '</div>';
@@ -14,7 +14,7 @@ window.Skeleton = (function () {
   function grid(n = 6) {
     let h = '<div class="grid">';
     for (let i = 0; i < n; i++) {
-      h += '<div class="grid-card"><div class="skeleton-box" style="width:100%;aspect-ratio:2/3"></div></div>';
+      h += '<div class="grid-card"><div class="skeleton-box" style="width:100%;aspect-ratio:16/9"></div></div>';
     }
     h += '</div>';
     return h;
