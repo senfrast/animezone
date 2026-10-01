@@ -15,7 +15,7 @@ import config
 from database import pool as db
 from database.queries import categories as categories_q
 from database.queries import titles as titles_q
-from utils import keyboards
+from utils import helpers, keyboards
 from utils.constants import LANGUAGES
 from utils.helpers import normalize_channel_link, truncate
 
@@ -160,25 +160,60 @@ async def got_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return STATUS
 
 
+_NSFW_KB = InlineKeyboardMarkup([
+    [InlineKeyboardButton("❌ No — Safe for All", callback_data="addt:nsfw:0")],
+    [InlineKeyboardButton("✅ Yes — 18+ Only", callback_data="addt:nsfw:1")],
+])
+
+
 async def got_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
-    context.user_data["new_title"]["status"] = q.data.split(":")[2]
+    d = context.user_data["new_title"]
+    d["status"] = q.data.split(":")[2]
+    cat = await categories_q.get_by_id(d["category_id"])
+    d["category_name"] = cat["name"] if cat else ""
+    if helpers.is_movie_category(d["category_name"]):
+        # films aren't episodic — ask about parts instead, one tap for the common case
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🎬 Single full movie", callback_data="addt:parts:1")],
+            [InlineKeyboardButton("2 parts", callback_data="addt:parts:2"),
+             InlineKeyboardButton("3 parts", callback_data="addt:parts:3"),
+             InlineKeyboardButton("4 parts", callback_data="addt:parts:4")],
+            [InlineKeyboardButton("🔢 Other number…", callback_data="addt:parts:ask")],
+        ])
+        await q.edit_message_text(
+            "🎬 Is this uploaded as one file, or split into parts on your channel?",
+            reply_markup=kb,
+        )
+        return EPISODES
     await q.edit_message_text("📺 Episode count? (send a number, 0 if unknown)")
     return EPISODES
 
 
+async def got_parts(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Movie categories: handle the part-count buttons."""
+    q = update.callback_query
+    await q.answer()
+    val = q.data.split(":")[2]
+    if val == "ask":
+        await q.edit_message_text("🔢 How many parts? (send a number)")
+        return EPISODES
+    context.user_data["new_title"]["episode_count"] = int(val)
+    await q.edit_message_text("🔞 Is this 18+ content?", reply_markup=_NSFW_KB)
+    return NSFW
+
+
 async def got_episodes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     txt = (update.message.text or "").strip()
+    is_movie = helpers.is_movie_category(context.user_data["new_title"].get("category_name"))
     if not txt.isdigit():
-        await update.message.reply_text("⚠️ Send a number (0 if unknown).")
+        await update.message.reply_text(
+            "⚠️ Send a number (1 for a single movie)." if is_movie else "⚠️ Send a number (0 if unknown)."
+        )
         return EPISODES
     context.user_data["new_title"]["episode_count"] = int(txt)
-    kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("❌ No — Safe for All", callback_data="addt:nsfw:0")],
-        [InlineKeyboardButton("✅ Yes — 18+ Only", callback_data="addt:nsfw:1")],
-    ])
-    await update.message.reply_text("🔞 Is this 18+ content?", reply_markup=kb)
+    await update.message.reply_text("🔞 Is this 18+ content?", reply_markup=_NSFW_KB)
     return NSFW
 
 
@@ -196,7 +231,7 @@ async def got_nsfw(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"<b>{d['title']}</b>\n"
         f"📂 {cat['emoji']} {cat['name']}\n"
         f"🎭 {', '.join(g['name'] for g in genre_names)}\n"
-        f"🌐 {d['language']} │ 📊 {d['status']} │ 📺 {d['episode_count']} eps\n"
+        f"🌐 {d['language']} │ 📊 {d['status']} │ {helpers.unit_label(cat['name'] if cat else '', d['episode_count'])}\n"
         f"🔞 {'Yes' if d['is_nsfw'] else 'No'}\n"
         f"🔗 {d['channel_link']}\n\n"
         f"{d.get('description') or '(no description)'}"
@@ -250,10 +285,16 @@ async def _notify_owners_pending(context, submitter, row):
     if submitter.username:
         who += f" (@{submitter.username})"
     who += f" [{submitter.id}]"
+    cat_name = ""
+    try:
+        c = await categories_q.get_by_id(row["category_id"])
+        cat_name = c["name"] if c else ""
+    except Exception:  # noqa: BLE001
+        pass
     caption = (
         "🕒 <b>NEW TITLE PENDING APPROVAL</b>\n\n"
         f"<b>{row['title']}</b>\n"
-        f"🌐 {row['language']} · 📊 {row['status']} · 📺 {row['episode_count']} eps\n"
+        f"🌐 {row['language']} · 📊 {row['status']} · {helpers.unit_label(cat_name, row['episode_count'])}\n"
         f"🔞 {'Yes' if row['is_nsfw'] else 'No'}\n"
         f"🔗 {row['channel_link']}\n\n"
         f"Submitted by: {who}"
@@ -291,7 +332,10 @@ def build_add_title_conv() -> ConversationHandler:
             GENRES: [CallbackQueryHandler(toggle_genre, pattern="^addt:(g:|gdone)")],
             LANGUAGE: [CallbackQueryHandler(got_language, pattern="^addt:lang:")],
             STATUS: [CallbackQueryHandler(got_status, pattern="^addt:st:")],
-            EPISODES: [MessageHandler(filters.TEXT & ~filters.COMMAND, got_episodes)],
+            EPISODES: [
+                CallbackQueryHandler(got_parts, pattern=r"^addt:parts:"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, got_episodes),
+            ],
             NSFW: [CallbackQueryHandler(got_nsfw, pattern="^addt:nsfw:")],
             CONFIRM: [CallbackQueryHandler(confirm, pattern="^addt:(publish|cancel)$")],
         },

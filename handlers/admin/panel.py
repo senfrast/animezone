@@ -11,7 +11,7 @@ from database.queries import analytics as analytics_q
 from database.queries import titles as titles_q
 from database.queries import users as users_q
 from services import link_validator
-from utils import keyboards
+from utils import helpers, keyboards
 from utils.decorators import admin_only, owner_only
 
 log = logging.getLogger("admin")
@@ -310,7 +310,7 @@ async def pending_approvals(update: Update, context: ContextTypes.DEFAULT_TYPE):
         caption = (
             f"<b>{r['title']}</b>\n"
             f"📂 {r['category_emoji']} {r['category_name']}\n"
-            f"🌐 {r['language']} · 📊 {r['status']} · 📺 {r['episode_count']} eps\n"
+            f"🌐 {r['language']} · 📊 {r['status']} · {helpers.unit_label(r['category_name'], r['episode_count'])}\n"
             f"🔞 {'Yes' if r['is_nsfw'] else 'No'}\n"
             f"🔗 {r['channel_link']}\n"
             f"👤 Submitted by: {r['added_by']}"

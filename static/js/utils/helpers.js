@@ -48,5 +48,15 @@ window.H = (function () {
     const r = Math.round(Number(rating) || 0);
     return '★'.repeat(r) + '☆'.repeat(5 - r);
   }
-  return { debounce, throttle, humanInt, el, esc, stars };
+  function isMovieCategory(name) {
+    const n = String(name || '').toLowerCase();
+    return n.includes('movie') || n.includes('film');
+  }
+  // Films show "Parts"/"Full Movie"; series show "Episodes".
+  function unitLabel(categoryName, count) {
+    const n = Number(count) || 0;
+    if (isMovieCategory(categoryName)) return n > 1 ? `🧩 ${n} Parts` : '🎬 Full Movie';
+    return n > 0 ? `📺 ${n} Episodes` : '';
+  }
+  return { debounce, throttle, humanInt, el, esc, stars, isMovieCategory, unitLabel };
 })();

@@ -49,3 +49,26 @@ def human_int(n) -> str:
 def truncate(text: str, length: int = 500) -> str:
     text = text or ""
     return text if len(text) <= length else text[: length - 1] + "…"
+
+
+# ---- movie-style categories (Movies, Anime movies, Films…) ----
+def is_movie_category(name: str) -> bool:
+    """True for categories that hold films rather than episodic series."""
+    n = (name or "").lower()
+    return "movie" in n or "film" in n
+
+
+def unit_label(category_name: str, count) -> str:
+    """Human label for episode_count: movies are split into 'Parts',
+    series into 'Episodes'. Returns '' when there is nothing useful to show."""
+    try:
+        count = int(count or 0)
+    except (TypeError, ValueError):
+        count = 0
+    if is_movie_category(category_name):
+        if count > 1:
+            return f"🧩 {count} Parts"
+        return "🎬 Full Movie"
+    if count > 0:
+        return f"📺 {count} Episodes"
+    return ""

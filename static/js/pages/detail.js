@@ -19,9 +19,22 @@ window.PageDetail = (function () {
     const hero = H.el('div', { class: 'detail-hero' });
     hero.innerHTML =
       `<div class="detail-hero-back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+       <img class="detail-hero-bg" src="${t.image_url}" aria-hidden="true" onerror="this.remove()">
        <img class="detail-hero-image" src="${t.image_url}" onerror="this.src='/assets/placeholder.svg'">
        <div class="detail-hero-overlay"></div>`;
     hero.querySelector('.detail-hero-back').addEventListener('click', () => Router.back());
+    // show the WHOLE cover (no cropping): match the hero box to the image's own
+    // shape, clamped so ultra-tall/ultra-wide art still looks right.
+    (function fitHero() {
+      const img = hero.querySelector('.detail-hero-image');
+      const apply = () => {
+        const r = img.naturalWidth / img.naturalHeight;
+        if (!r || !isFinite(r)) return;
+        hero.style.aspectRatio = String(Math.min(Math.max(r, 0.78), 2.1));
+      };
+      if (img.complete && img.naturalWidth) apply();
+      img.addEventListener('load', apply);
+    })();
     page.appendChild(hero);
 
     // title + meta
@@ -32,7 +45,7 @@ window.PageDetail = (function () {
        <div class="detail-meta-item">⭐ ${Number(t.rating || 0).toFixed(1)} (${t.rating_count || 0})</div>
        <div class="detail-meta-item">🌐 ${H.esc(t.language || '')}</div>
        <div class="detail-meta-item">📊 ${H.esc(t.status || '')}</div>
-       ${t.episode_count ? `<div class="detail-meta-item">📺 ${t.episode_count} eps</div>` : ''}
+       ${H.unitLabel(t.category_name, t.episode_count) ? `<div class="detail-meta-item">${H.unitLabel(t.category_name, t.episode_count)}</div>` : ''}
        ${t.is_nsfw ? '<div class="detail-meta-item" style="color:var(--error)">🔞 18+</div>' : ''}`;
     page.appendChild(meta);
 
