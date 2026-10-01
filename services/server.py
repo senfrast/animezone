@@ -1,7 +1,9 @@
 """aiohttp server: health + webhook + API + static Mini App files."""
 import asyncio
+import hashlib
 import logging
 import os
+import re
 
 from aiohttp import web
 from telegram import Update
@@ -62,12 +64,73 @@ async def clone_webhook(request):
     return web.Response(text="ok")
 
 
+# ---------------- asset cache-busting ----------------
+# Telegram's in-app WebView caches JS/CSS very aggressively. Without a version
+# token in the URL, users keep running an old build long after a deploy. We hash
+# the static bundle once at startup and stamp every asset URL with it, so a new
+# build always produces new URLs (and an unchanged build keeps its cache).
+_BUILD_VERSION = None
+_INDEX_HTML = None
+_ASSET_RE = re.compile(r'((?:src|href)=")(/(?:js|css|assets)/[^"?]+)(")')
+
+
+def build_version() -> str:
+    global _BUILD_VERSION
+    if _BUILD_VERSION:
+        return _BUILD_VERSION
+    h = hashlib.sha1()
+    for root, dirs, files in os.walk(config.STATIC_DIR):
+        dirs.sort()
+        for fn in sorted(files):
+            if fn.endswith((".js", ".css")):
+                try:
+                    with open(os.path.join(root, fn), "rb") as f:
+                        h.update(fn.encode())
+                        h.update(f.read())
+                except OSError:
+                    pass
+    _BUILD_VERSION = h.hexdigest()[:10]
+    log.info("static build version: %s", _BUILD_VERSION)
+    return _BUILD_VERSION
+
+
 async def serve_index(request):
-    return web.FileResponse(os.path.join(config.STATIC_DIR, "index.html"))
+    global _INDEX_HTML
+    if _INDEX_HTML is None:
+        with open(os.path.join(config.STATIC_DIR, "index.html"), encoding="utf-8") as f:
+            html = f.read()
+        _INDEX_HTML = _ASSET_RE.sub(rf"\1\2?v={build_version()}\3", html)
+    return web.Response(
+        text=_INDEX_HTML,
+        content_type="text/html",
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
+
+
+@web.middleware
+async def cache_middleware(request, handler):
+    """Versioned assets cache forever; everything else must revalidate."""
+    resp = await handler(request)
+    try:
+        path = request.path
+        if path.startswith(("/css/", "/js/", "/assets/")):
+            resp.headers["Cache-Control"] = (
+                "public, max-age=31536000, immutable" if request.query.get("v")
+                else "no-cache, must-revalidate"
+            )
+        elif path.startswith("/api/"):
+            resp.headers.setdefault("Cache-Control", "no-store")
+    except Exception:  # noqa: BLE001
+        pass
+    return resp
 
 
 def build_app(application) -> web.Application:
-    app = web.Application(middlewares=[api_middleware])
+    app = web.Application(middlewares=[cache_middleware, api_middleware])
     app["bot"] = application.bot
     app["application"] = application
 

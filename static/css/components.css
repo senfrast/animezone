@@ -168,7 +168,7 @@
 /* ===== DETAIL PAGE ===== */
 .detail-hero {
     width: calc(100% + 32px); margin: -16px -16px 0 -16px; position: relative; overflow: hidden;
-    aspect-ratio: 16 / 9; min-height: 190px; max-height: 70vh; background: var(--bg-primary);
+    aspect-ratio: 16 / 9; max-height: 72vh; background: var(--bg-primary);
 }
 /* blurred fill so letterboxed edges never look empty */
 .detail-hero-bg {
