@@ -27,7 +27,7 @@ async def clones_view(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not config.is_owner(q.from_user.id):
         await q.answer("⛔ Owner only", show_alert=True)
         return
-    rows = await clones_q.list_all()
+    rows = await clones_q.list_active()
     lines = ["🤖 <b>CLONE BOTS</b>\n"]
     if rows:
         lines.append(

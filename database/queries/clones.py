@@ -36,8 +36,28 @@ async def list_active():
 
 
 async def delete(bot_id: int):
+    """Soft-remove a clone.
+
+    Removing a clone used to hard-DELETE its bot_subscribers rows, which
+    destroyed the whole audience the moment an owner removed a bot — and
+    re-adding the same token came back empty. Telegram still remembers who
+    pressed Start (the bot_id never changes), so we only deactivate here and
+    keep the subscriber rows. Re-adding the same bot flips is_active back to
+    TRUE (see create()) and the audience + stats return intact.
+    """
+    await db.execute("UPDATE bot_clones SET is_active=FALSE WHERE bot_id=$1", bot_id)
+
+
+async def purge(bot_id: int):
+    """Permanently erase a clone and its subscribers (irreversible)."""
     await db.execute("DELETE FROM bot_subscribers WHERE bot_id=$1", bot_id)
     await db.execute("DELETE FROM bot_clones WHERE bot_id=$1", bot_id)
+
+
+async def list_inactive():
+    return await db.fetch(
+        "SELECT * FROM bot_clones WHERE is_active=FALSE ORDER BY created_at"
+    )
 
 
 async def set_maintenance(bot_id: int, on: bool):
