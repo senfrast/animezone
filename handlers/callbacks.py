@@ -70,6 +70,14 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from handlers.admin import clones as admin_clones
         await admin_clones.remove_clone(update, context)
         return
+    if data in ("admin:home", "start") or data.startswith("admin:addtitle"):
+        context.user_data.pop("tm_await", None)
+
+    if data.startswith("tm:"):
+        from handlers.admin import title_manager
+        await title_manager.route(update, context)
+        return
+
     if data.startswith("bkv:"):
         from handlers.admin import backup_vault as admin_vault
         if not config.is_owner(q.from_user.id):
@@ -115,7 +123,11 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif data == "admin:cats":
             await admin_cats.list_cats(update, context)
         elif data.startswith("admin:titles"):
-            await admin_panel.titles_page(update, context)
+            # "View All Titles" now opens the button-driven Title Manager
+            from handlers.admin import title_manager
+            parts = data.split(":")
+            off = parts[2] if len(parts) > 2 and parts[2].isdigit() else "0"
+            await title_manager.show_list(update, context, data=f"tm:l:{off}")
         elif data == "admin:featured":
             await admin_panel.featured_list(update, context)
         elif data == "admin:requests":

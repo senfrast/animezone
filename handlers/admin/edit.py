@@ -103,8 +103,16 @@ async def done_genres(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.edit_message_reply_markup(reply_markup=None)
         except Exception:  # noqa: BLE001
             pass
-        await q.message.reply_text(
-            f"✅ Genres updated: {label}", reply_markup=keyboards.back_admin_kb())
+        from handlers.admin import title_manager
+
+        text, kb = await title_manager._render(tid)
+        if text:
+            await q.message.reply_text(f"✅ Genres updated: {label}\n\n{text}",
+                                       reply_markup=kb, parse_mode="HTML",
+                                       disable_web_page_preview=True)
+        else:
+            await q.message.reply_text(f"✅ Genres updated: {label}",
+                                       reply_markup=keyboards.back_admin_kb())
 
 
 # ---- image edit (conversation) ----
@@ -151,26 +159,18 @@ def build_edit_image_conv() -> ConversationHandler:
     )
 
 
-# ---- /edit_<id> entry from "View All Titles" ----
+# ---- /edit_<id> entry — opens the full button-driven Title Manager ----
 async def edit_menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not config.is_owner(update.effective_user.id):
         return
     tid = (update.message.text or "").replace("/edit_", "").strip()
     if not tid.isdigit():
         return
-    tid = int(tid)
-    row = await titles_q.get_by_id(tid)
-    if not row:
+    from handlers.admin import title_manager
+
+    text, kb = await title_manager._render(int(tid))
+    if text is None:
         await update.message.reply_text("Title not found.")
         return
-    kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("✏️ Edit Genres", callback_data=f"egen:{tid}"),
-         InlineKeyboardButton("🖼️ Edit Image", callback_data=f"eimg:{tid}")],
-        [InlineKeyboardButton("🔙 Back to Panel", callback_data="admin:home")],
-    ])
-    genres = await titles_q.genres_full(tid)
-    glabel = ", ".join(g["name"] for g in genres) or "(none)"
-    await update.message.reply_text(
-        f"✏️ <b>Editing #{tid} — {row['title']}</b>\nCurrent genres: {glabel}",
-        reply_markup=kb, parse_mode="HTML",
-    )
+    await update.message.reply_text(text, reply_markup=kb, parse_mode="HTML",
+                                    disable_web_page_preview=True)

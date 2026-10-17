@@ -59,7 +59,7 @@ def admin_home_kb(is_owner: bool = True, pending: int = 0):
         [InlineKeyboardButton(pend_label, callback_data="admin:pending")],
         [InlineKeyboardButton("📂 Manage Categories", callback_data="admin:cats")],
         [InlineKeyboardButton("➕ Add New Title", callback_data="admin:addtitle")],
-        [InlineKeyboardButton("📋 View All Titles", callback_data="admin:titles:0")],
+        [InlineKeyboardButton("🎬 Manage Titles (edit / status / episodes)", callback_data="admin:titles:0")],
         [InlineKeyboardButton("⭐ Manage Featured", callback_data="admin:featured")],
         [InlineKeyboardButton("📝 Content Requests", callback_data="admin:requests")],
         [InlineKeyboardButton("👥 User Stats", callback_data="admin:users"),

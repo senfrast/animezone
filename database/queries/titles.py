@@ -440,3 +440,108 @@ async def list_all_grouped():
         ORDER BY c.sort_order, c.name, LOWER(t.title)
         """
     )
+
+
+# ---------------- admin field editing (button-driven Title Manager) ----------------
+# Whitelist: only these columns may be written through the generic editor, so a
+# bad callback can never touch ids, counters or timestamps.
+EDITABLE_FIELDS = {
+    "title", "title_alt", "description", "channel_link", "language",
+    "status", "episode_count", "quality", "release_year", "category_id",
+    "is_nsfw",
+}
+
+
+async def update_field(tid: int, field: str, value):
+    if field not in EDITABLE_FIELDS:
+        raise ValueError(f"field not editable: {field}")
+    await db.execute(
+        f"UPDATE titles SET {field} = $1, updated_at = NOW() WHERE title_id = $2",
+        value, tid,
+    )
+
+
+async def bump_episodes(tid: int, delta: int) -> int:
+    """Increment/decrement the episode (or part) count, never below zero."""
+    return await db.fetchval(
+        "UPDATE titles SET episode_count = GREATEST(0, COALESCE(episode_count,0) + $1), "
+        "updated_at = NOW() WHERE title_id = $2 RETURNING episode_count",
+        delta, tid,
+    )
+
+
+async def set_status(tid: int, status: str):
+    await db.execute(
+        "UPDATE titles SET status = $1, updated_at = NOW() WHERE title_id = $2", status, tid
+    )
+
+
+async def toggle_status(tid: int) -> str:
+    """Ongoing <-> Completed. Used when a new season drops or a show ends."""
+    return await db.fetchval(
+        "UPDATE titles SET status = CASE WHEN status = 'Completed' THEN 'Ongoing' "
+        "ELSE 'Completed' END, updated_at = NOW() WHERE title_id = $1 RETURNING status",
+        tid,
+    )
+
+
+async def admin_search(query: str, limit: int = 20):
+    """Name search for admins — ignores NSFW/approval filters so every title
+    can be found and fixed."""
+    return await db.fetch(
+        """
+        SELECT t.title_id, t.title, t.status, t.episode_count, t.is_featured,
+               t.is_nsfw, t.deleted_at, c.name AS category_name, c.emoji AS category_emoji
+        FROM titles t JOIN categories c ON c.category_id = t.category_id
+        WHERE t.title ILIKE '%' || $1 || '%' OR COALESCE(t.title_alt,'') ILIKE '%' || $1 || '%'
+        ORDER BY (t.deleted_at IS NOT NULL), LOWER(t.title)
+        LIMIT $2
+        """,
+        query, limit,
+    )
+
+
+async def admin_list(limit: int = 8, offset: int = 0, category_id: int | None = None):
+    """Paginated title list for the manager UI."""
+    if category_id:
+        return await db.fetch(
+            """
+            SELECT t.title_id, t.title, t.status, t.episode_count, t.is_featured,
+                   t.is_nsfw, c.name AS category_name, c.emoji AS category_emoji
+            FROM titles t JOIN categories c ON c.category_id = t.category_id
+            WHERE t.deleted_at IS NULL AND t.category_id = $3
+            ORDER BY LOWER(t.title) LIMIT $1 OFFSET $2
+            """,
+            limit, offset, category_id,
+        )
+    return await db.fetch(
+        """
+        SELECT t.title_id, t.title, t.status, t.episode_count, t.is_featured,
+               t.is_nsfw, c.name AS category_name, c.emoji AS category_emoji
+        FROM titles t JOIN categories c ON c.category_id = t.category_id
+        WHERE t.deleted_at IS NULL
+        ORDER BY LOWER(t.title) LIMIT $1 OFFSET $2
+        """,
+        limit, offset,
+    )
+
+
+async def admin_count(category_id: int | None = None) -> int:
+    if category_id:
+        return await db.fetchval(
+            "SELECT COUNT(*) FROM titles WHERE deleted_at IS NULL AND category_id=$1",
+            category_id,
+        ) or 0
+    return await db.fetchval("SELECT COUNT(*) FROM titles WHERE deleted_at IS NULL") or 0
+
+
+async def get_full(tid: int):
+    """Everything the editor screen needs, in one round-trip."""
+    return await db.fetchrow(
+        """
+        SELECT t.*, c.name AS category_name, c.emoji AS category_emoji
+        FROM titles t JOIN categories c ON c.category_id = t.category_id
+        WHERE t.title_id = $1
+        """,
+        tid,
+    )
