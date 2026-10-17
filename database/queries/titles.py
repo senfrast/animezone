@@ -420,3 +420,23 @@ async def user_rating(user_id: int, title_id: int):
     return await db.fetchval(
         "SELECT rating FROM ratings WHERE user_id=$1 AND title_id=$2", user_id, title_id
     )
+
+
+async def list_all_grouped():
+    """Every live title grouped for the /list text export (admins only).
+
+    Ordered by the category's own sort order, then alphabetically by title so
+    the printed list is stable and easy to scan.
+    """
+    return await db.fetch(
+        """
+        SELECT c.category_id, c.name AS category_name, c.emoji AS category_emoji,
+               t.title_id, t.title
+        FROM titles t
+        JOIN categories c ON c.category_id = t.category_id
+        WHERE t.deleted_at IS NULL
+          AND t.is_active = TRUE
+          AND t.is_approved = TRUE
+        ORDER BY c.sort_order, c.name, LOWER(t.title)
+        """
+    )

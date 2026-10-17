@@ -57,6 +57,7 @@ def register_handlers(application):
     application.add_handler(CommandHandler("delete", admin_panel.del_title_command))
     application.add_handler(CommandHandler("restore", admin_panel.restore_title_command))
     application.add_handler(CommandHandler("trash", admin_panel.trash_command))
+    application.add_handler(CommandHandler("list", admin_panel.list_command))
     application.add_handler(CommandHandler("delcat", admin_cats.delcat_command))
     application.add_handler(CommandHandler("req_done", admin_panel.req_done_command))
     # these commands include the id suffix (e.g. /feature_12) -> use regex handler

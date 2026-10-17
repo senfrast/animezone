@@ -1,5 +1,6 @@
 """Admin panel home + read-only dashboards + simple actions."""
 import csv
+import html
 import io
 import logging
 
@@ -282,6 +283,56 @@ async def trash_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         when = r["deleted_at"].strftime("%Y-%m-%d %H:%M") if r.get("deleted_at") else ""
         lines.append(f"• <b>{r['title']}</b> (#{r['title_id']}) · deleted {when} → /restore_{r['title_id']}")
     await update.message.reply_text("\n".join(lines), parse_mode="HTML")
+
+
+@admin_only
+async def list_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/list — plain-text export of every live title, grouped by category.
+
+    Owner + moderators only. Telegram caps a message at 4096 chars, so the text
+    is split across as many messages as needed: always on a line boundary, and
+    never leaving a category heading stranded at the bottom of a page.
+    """
+    rows = await titles_q.list_all_grouped()
+    if not rows:
+        await update.message.reply_text("📭 No titles yet.")
+        return
+
+    # quote=False keeps apostrophes as-is; Telegram only needs & < > escaped
+    # and does not decode numeric entities like &#x27;.
+    esc = lambda v: html.escape(str(v or ""), quote=False)
+
+    lines, cat, n, cats = [], None, 0, 0
+    for r in rows:
+        if r["category_id"] != cat:
+            cat, n = r["category_id"], 0
+            cats += 1
+            lines.append(("head", f"<b>{esc(r['category_emoji'] or '📂')} {esc(r['category_name']).upper()}</b>"))
+        n += 1
+        lines.append(("item", f"{n}. {esc(r['title'])}"))
+
+    LIMIT = 3900
+    pages, buf = [], f"📜 <b>ANIMEZONE — FULL LIST</b>\n<i>{len(rows)} titles · {cats} categories</i>"
+    for i, (kind, text) in enumerate(lines):
+        chunk = ("\n\n" if kind == "head" else "\n") + text
+        # don't orphan a heading: it needs room for itself + its first entry
+        need = len(chunk)
+        if kind == "head" and i + 1 < len(lines):
+            need += len(lines[i + 1][1]) + 1
+        if len(buf) + need > LIMIT:
+            pages.append(buf)
+            buf = text if kind == "head" else text
+        else:
+            buf += chunk
+    if buf.strip():
+        pages.append(buf)
+
+    total = len(pages)
+    for i, page in enumerate(pages, 1):
+        suffix = f"\n\n<i>— page {i}/{total} —</i>" if total > 1 else ""
+        await update.message.reply_text(
+            page + suffix, parse_mode="HTML", disable_web_page_preview=True
+        )
 
 
 async def pending_approvals(update: Update, context: ContextTypes.DEFAULT_TYPE):
