@@ -160,6 +160,23 @@ async def got_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return STATUS
 
 
+async def _ask_nsfw(send, user_id: int, context):
+    """Ask the 18+ question — but only offer "Yes" to users allowed to post it."""
+    from utils import roles
+
+    if await roles.may_upload_nsfw(user_id):
+        await send("🔞 Is this 18+ content?", reply_markup=_NSFW_KB)
+    else:
+        # not permitted: force safe and skip the question entirely
+        context.user_data["new_title"]["is_nsfw"] = False
+        await send(
+            "🔞 This will be published as <b>Safe for All</b>.\n"
+            "<i>(you don't have permission to add 18+ content)</i>",
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("➡️ Continue", callback_data="addt:nsfw:0")]]),
+            parse_mode="HTML")
+
+
 _NSFW_KB = InlineKeyboardMarkup([
     [InlineKeyboardButton("❌ No — Safe for All", callback_data="addt:nsfw:0")],
     [InlineKeyboardButton("✅ Yes — 18+ Only", callback_data="addt:nsfw:1")],
@@ -200,7 +217,7 @@ async def got_parts(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.edit_message_text("🔢 How many parts? (send a number)")
         return EPISODES
     context.user_data["new_title"]["episode_count"] = int(val)
-    await q.edit_message_text("🔞 Is this 18+ content?", reply_markup=_NSFW_KB)
+    await _ask_nsfw(q.edit_message_text, q.from_user.id, context)
     return NSFW
 
 
@@ -213,7 +230,7 @@ async def got_episodes(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return EPISODES
     context.user_data["new_title"]["episode_count"] = int(txt)
-    await update.message.reply_text("🔞 Is this 18+ content?", reply_markup=_NSFW_KB)
+    await _ask_nsfw(update.message.reply_text, update.effective_user.id, context)
     return NSFW
 
 
@@ -255,11 +272,17 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     d["genre_ids"] = list(d.get("genre_ids", []))
     d["added_by"] = q.from_user.id
 
-    # Owners publish instantly. Moderators submit for approval (kept hidden).
-    is_owner = config.is_owner(q.from_user.id)
-    row = await titles_q.create(d, approved=is_owner)
+    # Owners always publish instantly; moderators do too when the owner gave
+    # them the "⚡ Auto-publish" permission. Everyone else goes to the queue.
+    from utils import roles
 
-    if is_owner:
+    instant = await roles.publishes_instantly(q.from_user.id)
+    # a moderator without the 18+ permission can never publish adult content
+    if d.get("is_nsfw") and not await roles.may_upload_nsfw(q.from_user.id):
+        d["is_nsfw"] = False
+    row = await titles_q.create(d, approved=instant)
+
+    if instant:
         await categories_q.refresh_count(d["category_id"])
         context.user_data.pop("new_title", None)
         await q.message.reply_text(

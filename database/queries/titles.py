@@ -545,3 +545,17 @@ async def get_full(tid: int):
         """,
         tid,
     )
+
+
+async def search_index():
+    """Lightweight list of every searchable title (used by the fuzzy
+    text-search the bot runs on plain messages)."""
+    return await db.fetch(
+        """
+        SELECT t.title_id, t.title, t.title_alt, t.slug, t.is_nsfw,
+               t.status, t.episode_count, t.channel_link,
+               c.name AS category_name, c.emoji AS category_emoji, c.slug AS category_slug
+        FROM titles t JOIN categories c ON c.category_id = t.category_id
+        WHERE t.deleted_at IS NULL AND t.is_active = TRUE AND t.is_approved = TRUE
+        """
+    )

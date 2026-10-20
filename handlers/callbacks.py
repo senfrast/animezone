@@ -73,6 +73,19 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data in ("admin:home", "start") or data.startswith("admin:addtitle"):
         context.user_data.pop("tm_await", None)
 
+    if data.startswith("ts:"):
+        from handlers import text_search
+        await text_search.on_pick(update, context)
+        return
+
+    if data.startswith("mperm:"):
+        await admin_manage.mod_perms(update, context)
+        return
+
+    if data.startswith("mpset:"):
+        await admin_manage.mod_perm_toggle(update, context)
+        return
+
     if data.startswith("tm:"):
         from handlers.admin import title_manager
         await title_manager.route(update, context)

@@ -93,6 +93,16 @@ async def run_migrations():
 
     # Idempotent patches — always safe to run, applied on every boot.
     patches = [
+        # Per-moderator permissions, controlled from the admin panel.
+        "ALTER TABLE bot_admins ADD COLUMN IF NOT EXISTS auto_approve BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE bot_admins ADD COLUMN IF NOT EXISTS can_nsfw BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE bot_admins ADD COLUMN IF NOT EXISTS can_edit BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE bot_admins ADD COLUMN IF NOT EXISTS can_delete BOOLEAN DEFAULT FALSE",
+        # 18+ genre for adult titles.
+        "INSERT INTO genres (name, emoji, slug) VALUES ('18+', '🔞', '18-plus') "
+        "ON CONFLICT (name) DO NOTHING",
+        # trigram index powers typo-tolerant title search from the bot chat.
+        "CREATE EXTENSION IF NOT EXISTS pg_trgm",
         "ALTER TABLE titles ADD COLUMN IF NOT EXISTS is_approved BOOLEAN DEFAULT TRUE",
         # Soft-delete support: deleted titles keep their row so they can be restored.
         "ALTER TABLE titles ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ",

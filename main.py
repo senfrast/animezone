@@ -70,17 +70,21 @@ def register_handlers(application):
     application.add_handler(MessageHandler(filters.Regex(r"^/edit_\d+"), admin_edit.edit_menu_command))
     application.add_handler(MessageHandler(filters.Regex(r"^/delcat_\d+"), admin_cats.delcat_command))
     application.add_handler(MessageHandler(filters.Regex(r"^/req_done_\d+"), admin_panel.req_done_command))
-    # Title Manager free-text replies (rename / description / set count / search).
-    # Registered after the conversations so an active conversation always wins.
-    async def _tm_text(update, context):
-        from handlers.admin import title_manager
-        await title_manager.on_text(update, context)
-
-    application.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, _tm_text), group=1
-    )
     # forwarded message from a channel -> register it as the backup vault
     application.add_handler(MessageHandler(filters.FORWARDED, admin_vault.on_forwarded))
+    # Plain text, claimed by nobody else. Registered in group 0 *after* every
+    # ConversationHandler, so an active conversation always consumes the message
+    # first and we never answer on top of it.
+    async def _on_text(update, context):
+        from handlers.admin import title_manager
+
+        if await title_manager.on_text(update, context):
+            return  # it was an answer to an editor prompt
+        from handlers import text_search
+
+        await text_search.handle(update, context)
+
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, _on_text))
     # 10 callback router LAST
     application.add_handler(CallbackQueryHandler(callback_router))
 
