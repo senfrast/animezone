@@ -7,7 +7,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 import config
 from database import pool as db
-from services import backup_service, link_validator
+from services import autodelete, backup_service, link_validator
 
 log = logging.getLogger("scheduler")
 
@@ -81,6 +81,13 @@ def build_scheduler(bot) -> AsyncIOScheduler:
         except Exception:  # noqa: BLE001
             log.exception("daily backup failed")
 
+    async def job_autodelete():
+        try:
+            await autodelete.sweep()
+        except Exception:  # noqa: BLE001
+            log.exception("autodelete sweep failed")
+
+    sched.add_job(job_autodelete, IntervalTrigger(seconds=30), id="autodelete")
     sched.add_job(job_validate_links, IntervalTrigger(hours=6), id="validate_links")
     sched.add_job(job_refresh_counts, IntervalTrigger(hours=1), id="refresh_counts")
     sched.add_job(job_cleanup, CronTrigger(day_of_week="sun", hour=3), id="cleanup")

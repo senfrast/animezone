@@ -16,6 +16,16 @@ def _nsfw_clause(show_nsfw: bool) -> str:
     )
 
 
+def _bust():
+    """Drop the fuzzy-search cache so a change is searchable immediately."""
+    try:
+        from services import title_search
+
+        title_search.invalidate()
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def serialize(row, bookmark_ids=None) -> dict:
     if row is None:
         return None
@@ -216,6 +226,7 @@ async def create(data: dict, approved: bool = True):
     """Create a title. If approved=False the title is saved as PENDING:
     is_active=FALSE + is_approved=FALSE, so it stays hidden from the app
     until an owner approves it."""
+    _bust()
     slug = slugify(data["title"])
     # ensure unique slug
     n = 1
@@ -260,6 +271,7 @@ async def count_pending():
 
 
 async def approve(tid: int):
+    _bust()
     row = await db.fetchrow(
         "UPDATE titles SET is_approved=TRUE, is_active=TRUE, updated_at=NOW() "
         "WHERE title_id=$1 RETURNING *",
@@ -289,6 +301,7 @@ async def title_genre_ids(tid: int):
 
 
 async def add_genre(tid: int, gid: int):
+    _bust()
     await db.execute(
         "INSERT INTO title_genres (title_id, genre_id) VALUES ($1,$2) ON CONFLICT DO NOTHING",
         tid, gid,
@@ -296,11 +309,13 @@ async def add_genre(tid: int, gid: int):
 
 
 async def remove_genre(tid: int, gid: int):
+    _bust()
     await db.execute(
         "DELETE FROM title_genres WHERE title_id=$1 AND genre_id=$2", tid, gid)
 
 
 async def set_image(tid: int, file_id: str):
+    _bust()
     await db.execute(
         "UPDATE titles SET image_file_id=$1, updated_at=NOW() WHERE title_id=$2",
         file_id, tid,
@@ -308,12 +323,14 @@ async def set_image(tid: int, file_id: str):
 
 
 async def set_active(tid: int, value: bool):
+    _bust()
     await db.execute("UPDATE titles SET is_active=$1 WHERE title_id=$2", value, tid)
 
 
 async def delete(tid: int):
     """SOFT delete: hide the title but keep the row so it can be restored.
     Returns the title name if a row was affected, else None."""
+    _bust()
     row = await db.fetchrow(
         "UPDATE titles SET is_active=FALSE, deleted_at=NOW() "
         "WHERE title_id=$1 AND deleted_at IS NULL RETURNING title",
@@ -324,6 +341,7 @@ async def delete(tid: int):
 
 async def restore(tid: int):
     """Undo a soft delete. Returns the title name if restored, else None."""
+    _bust()
     row = await db.fetchrow(
         "UPDATE titles SET is_active=TRUE, deleted_at=NULL, updated_at=NOW() "
         "WHERE title_id=$1 AND deleted_at IS NOT NULL RETURNING title",
@@ -334,6 +352,7 @@ async def restore(tid: int):
 
 async def hard_delete(tid: int):
     """Permanently remove a title (only from the Trash)."""
+    _bust()
     await db.execute("DELETE FROM titles WHERE title_id=$1", tid)
 
 
@@ -357,6 +376,7 @@ async def count_all():
 
 
 async def set_featured(tid: int, value: bool, order: int = 0):
+    _bust()
     await db.execute(
         "UPDATE titles SET is_featured=$1, featured_order=$2 WHERE title_id=$3",
         value, order, tid,
@@ -453,6 +473,7 @@ EDITABLE_FIELDS = {
 
 
 async def update_field(tid: int, field: str, value):
+    _bust()
     if field not in EDITABLE_FIELDS:
         raise ValueError(f"field not editable: {field}")
     await db.execute(
@@ -463,6 +484,7 @@ async def update_field(tid: int, field: str, value):
 
 async def bump_episodes(tid: int, delta: int) -> int:
     """Increment/decrement the episode (or part) count, never below zero."""
+    _bust()
     return await db.fetchval(
         "UPDATE titles SET episode_count = GREATEST(0, COALESCE(episode_count,0) + $1), "
         "updated_at = NOW() WHERE title_id = $2 RETURNING episode_count",
@@ -471,6 +493,7 @@ async def bump_episodes(tid: int, delta: int) -> int:
 
 
 async def set_status(tid: int, status: str):
+    _bust()
     await db.execute(
         "UPDATE titles SET status = $1, updated_at = NOW() WHERE title_id = $2", status, tid
     )
@@ -478,6 +501,7 @@ async def set_status(tid: int, status: str):
 
 async def toggle_status(tid: int) -> str:
     """Ongoing <-> Completed. Used when a new season drops or a show ends."""
+    _bust()
     return await db.fetchval(
         "UPDATE titles SET status = CASE WHEN status = 'Completed' THEN 'Ongoing' "
         "ELSE 'Completed' END, updated_at = NOW() WHERE title_id = $1 RETURNING status",

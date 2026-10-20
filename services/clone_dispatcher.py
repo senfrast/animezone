@@ -174,8 +174,22 @@ async def _on_message(bot, bot_id: int, update: Update):
             await _send_panel(bot, bot_id, uid)
         return
 
-    # Any other message from a normal user -> nudge them to open the app.
-    if not is_owner and not clone_manager.is_maintenance(bot_id):
+    # Anything else is treated as a title search — same fuzzy engine, same card
+    # and same "Open This Title" button as the main bot, but sent by *this*
+    # clone so the Mini App opens inside this bot.
+    if clone_manager.is_maintenance(bot_id):
+        return
+    if not text:
+        await bot.send_message(uid, "Tap a button below 👇", reply_markup=_welcome_kb())
+        return
+    from handlers import text_search
+
+    try:
+        handled = await text_search.answer(bot, bot_id, uid, uid, text, msg.message_id)
+    except Exception:  # noqa: BLE001
+        log.exception("clone search failed (bot %s)", bot_id)
+        handled = None
+    if handled is None and not is_owner:
         await bot.send_message(uid, "Tap a button below 👇", reply_markup=_welcome_kb())
 
 
@@ -222,6 +236,13 @@ async def _user_callback(bot, cq, data: str) -> bool:
                                         reply_markup=_welcome_kb(), parse_mode="HTML")
         except Exception:  # noqa: BLE001
             await bot.send_message(uid, WELCOME_TEXT, reply_markup=_welcome_kb(), parse_mode="HTML")
+        return True
+    if data.startswith("ts:"):
+        await bot.answer_callback_query(cq.id)
+        from handlers import text_search
+
+        bot_id = getattr(bot, "id", 0) or 0
+        await text_search.send_title_card(bot, bot_id, uid, int(data.split(":")[1]))
         return True
     if data == "usettings":
         await bot.answer_callback_query(cq.id)

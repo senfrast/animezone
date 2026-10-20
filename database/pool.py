@@ -93,6 +93,15 @@ async def run_migrations():
 
     # Idempotent patches — always safe to run, applied on every boot.
     patches = [
+        """CREATE TABLE IF NOT EXISTS pending_deletions (
+               id          BIGSERIAL PRIMARY KEY,
+               bot_id      BIGINT NOT NULL DEFAULT 0,
+               chat_id     BIGINT NOT NULL,
+               message_id  BIGINT NOT NULL,
+               delete_at   TIMESTAMPTZ NOT NULL,
+               UNIQUE (chat_id, message_id)
+           )""",
+        "CREATE INDEX IF NOT EXISTS idx_pending_del_due ON pending_deletions (delete_at)",
         # Per-moderator permissions, controlled from the admin panel.
         "ALTER TABLE bot_admins ADD COLUMN IF NOT EXISTS auto_approve BOOLEAN DEFAULT FALSE",
         "ALTER TABLE bot_admins ADD COLUMN IF NOT EXISTS can_nsfw BOOLEAN DEFAULT FALSE",
