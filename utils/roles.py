@@ -28,6 +28,9 @@ async def can(user_id: int, perm: str) -> bool:
     try:
         perms = await admins_q.perms_for(user_id)
     except Exception:  # noqa: BLE001
+        # Never fail silently here: a bug in the permission query used to look
+        # exactly like "the owner didn't grant it".
+        log.exception("permission lookup failed for %s (%s) — denying", user_id, perm)
         return False
     return bool(perms.get(perm))
 

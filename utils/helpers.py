@@ -58,13 +58,16 @@ def is_movie_category(name: str) -> bool:
     return "movie" in n or "film" in n
 
 
-def unit_label(category_name: str, count) -> str:
+def unit_label(category_name: str, count, is_nsfw: bool = False) -> str:
     """Human label for episode_count: movies are split into 'Parts',
-    series into 'Episodes'. Returns '' when there is nothing useful to show."""
+    series into 'Episodes', adult titles are counted in 'Videos'.
+    Returns '' when there is nothing useful to show."""
     try:
         count = int(count or 0)
     except (TypeError, ValueError):
         count = 0
+    if is_nsfw:
+        return f"🎬 {count} Videos" if count > 0 else ""
     if is_movie_category(category_name):
         if count > 1:
             return f"🧩 {count} Parts"

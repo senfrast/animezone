@@ -61,11 +61,26 @@ async def toggle_perm(user_id: int, perm: str) -> bool:
 
 
 async def perms_for(user_id: int) -> dict:
-    """Permission map for one moderator. Owners implicitly get everything."""
+    """Permission map for one moderator. Owners implicitly get everything.
+
+    The column list is derived from PERMS so adding a permission can never
+    again leave this query behind (that silently turned every permission off).
+    """
     row = await db.fetchrow(
-        "SELECT auto_approve, can_nsfw, can_edit, can_delete FROM bot_admins WHERE user_id=$1",
-        user_id,
+        f"SELECT {', '.join(PERMS)} FROM bot_admins WHERE user_id=$1", user_id
     )
     if not row:
         return {p: False for p in PERMS}
-    return {p: bool(row[p]) for p in PERMS}
+    data = dict(row)
+    return {p: bool(data.get(p)) for p in PERMS}
+
+
+async def update_profile(user_id: int, first_name=None, username=None):
+    """Cache a moderator's display name so the list isn't a wall of numbers."""
+    await db.execute(
+        """UPDATE bot_admins
+           SET first_name = COALESCE($2, first_name),
+               username   = COALESCE($3, username)
+         WHERE user_id = $1""",
+        user_id, first_name, username,
+    )

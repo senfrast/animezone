@@ -64,7 +64,8 @@ def _adult_shelf_kb():
 def _card(row) -> str:
     from utils import helpers
 
-    unit = helpers.unit_label(row.get("category_name"), row.get("episode_count"))
+    unit = helpers.unit_label(row.get("category_name"), row.get("episode_count"),
+                              bool(row.get("is_nsfw")))
     bits = [f"{row.get('category_emoji') or '📂'} {esc(row.get('category_name'))}"]
     if row.get("status"):
         bits.append("✅ Completed" if str(row["status"]).lower() == "completed" else "🟢 Ongoing")

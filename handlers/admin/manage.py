@@ -1,5 +1,6 @@
 """Owner tools: manage moderators (from the panel) + backup / restore."""
 import json
+import html
 import logging
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -23,6 +24,40 @@ MOD_INPUT = 0
 RESTORE_FILE = 0
 
 
+async def _resolve_name(bot, m) -> dict:
+    """Fill in a moderator's name from Telegram the first time we show them.
+
+    Moderators added by pasting a user id have no name stored, so the list used
+    to be a wall of numbers.
+    """
+    m = dict(m)
+    if m.get("first_name") or m.get("username"):
+        return m
+    try:
+        chat = await bot.get_chat(m["user_id"])
+        m["first_name"] = chat.first_name or chat.title
+        m["username"] = chat.username
+        await admins_q.update_profile(m["user_id"], m["first_name"], m["username"])
+    except Exception:  # noqa: BLE001 — user never started the bot / is unreachable
+        log.debug("could not resolve moderator %s", m.get("user_id"))
+    return m
+
+
+def _mod_name(m) -> str:
+    name = (m.get("first_name") or "").strip()
+    if not name and m.get("username"):
+        name = f"@{m['username']}"
+    return name or f"User {m['user_id']}"
+
+
+def _mod_link(m) -> str:
+    """Clickable mention that opens the person's Telegram profile."""
+    name = html.escape(_mod_name(m), quote=False)
+    if m.get("username"):
+        return f'<a href="https://t.me/{m["username"]}">{name}</a>'
+    return f'<a href="tg://user?id={m["user_id"]}">{name}</a>'
+
+
 # ---------------- moderators ----------------
 async def mods_view(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -37,15 +72,13 @@ async def mods_view(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if config.ENV_MODERATOR_IDS:
         lines.append("<b>From server config (permanent):</b>")
         for uid in config.ENV_MODERATOR_IDS:
-            lines.append(f"• <code>{uid}</code>")
+            lines.append(f'• <a href="tg://user?id={uid}">User {uid}</a>')
         lines.append("")
     lines.append("<b>Added from panel:</b>")
     if db_mods:
         for m in db_mods:
-            label = m["first_name"] or ""
-            if m["username"]:
-                label += f" (@{m['username']})"
-            label = label.strip() or f"User {m['user_id']}"
+            m = await _resolve_name(context.bot, m)
+            label = _mod_name(m)
             badges = ""
             if m.get("auto_approve"):
                 badges += "⚡"
@@ -57,9 +90,9 @@ async def mods_view(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 badges += "✏️"
             if m.get("can_delete"):
                 badges += "🗑️"
-            lines.append(f"• {label} — <code>{m['user_id']}</code> {badges}")
+            lines.append(f"• {_mod_link(m)} {badges}".rstrip())
             rows.append([InlineKeyboardButton(
-                f"⚙️ {label} {badges}", callback_data=f"mperm:{m['user_id']}")])
+                f"⚙️ {label} {badges}".rstrip(), callback_data=f"mperm:{m['user_id']}")])
     else:
         lines.append("• (none yet)")
     lines.append("\n<i>⚡ auto-publish · ⚡🔞 auto-publish 18+ · 🔞 may add 18+ · "
@@ -96,12 +129,8 @@ async def mod_perms(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.edit_message_text("Moderator not found.",
                                   reply_markup=keyboards.back_admin_kb("admin:mods"))
         return
-    label = (m["first_name"] or "").strip()
-    if m["username"]:
-        label += f" (@{m['username']})"
-    label = label or f"User {uid}"
-
-    body = [f"⚙️ <b>PERMISSIONS</b>\n{label} — <code>{uid}</code>\n"]
+    m = await _resolve_name(context.bot, m)
+    body = [f"⚙️ <b>PERMISSIONS</b>\n{_mod_link(m)} — <code>{uid}</code>\n"]
     rows = []
     for perm, (title, desc) in _PERM_LABELS.items():
         on = bool(m[perm])

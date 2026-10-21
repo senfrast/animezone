@@ -108,9 +108,34 @@ async def got_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return GENRES
 
 
+_ADULT_GENRE_IDS = None
+
+
+async def adult_genre_ids() -> set:
+    """Genre ids that mean "this is adult content" (18+ / Adult / Hentai)."""
+    global _ADULT_GENRE_IDS
+    if _ADULT_GENRE_IDS is None:
+        try:
+            rows = await db.fetch(
+                "SELECT genre_id FROM genres WHERE LOWER(name) IN ('18+','adult','hentai','xxx') "
+                "OR slug IN ('18-plus','adult','hentai')"
+            )
+            _ADULT_GENRE_IDS = {r["genre_id"] for r in rows}
+        except Exception:  # noqa: BLE001
+            return set()
+    return _ADULT_GENRE_IDS
+
+
 async def _show_genres(q, context):
     genres = await db.fetch("SELECT genre_id, name, emoji FROM genres ORDER BY name")
     selected = context.user_data["new_title"]["genre_ids"]
+    # someone who may not post 18+ never even sees the 18+ genre
+    from utils import roles
+
+    if not await roles.may_upload_nsfw(q.from_user.id):
+        blocked = await adult_genre_ids()
+        genres = [g for g in genres if g["genre_id"] not in blocked]
+        selected -= blocked
     rows, row = [], []
     for g in genres:
         mark = "✅" if g["genre_id"] in selected else ""
@@ -132,9 +157,24 @@ async def toggle_genre(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
     if q.data == "addt:gdone":
-        if not context.user_data["new_title"]["genre_ids"]:
+        d = context.user_data["new_title"]
+        if not d["genre_ids"]:
             await q.answer("Select at least 1 genre", show_alert=True)
             return GENRES
+        # 18+ genre picked: it IS adult content, so don't ask whether it's safe,
+        # and skip the language / ongoing-completed questions that don't apply.
+        if d["genre_ids"] & await adult_genre_ids():
+            d["force_nsfw"] = True
+            d["is_nsfw"] = True
+            d.setdefault("language", "Hindi")
+            d.setdefault("status", "Completed")
+            cat = await categories_q.get_by_id(d["category_id"])
+            d["category_name"] = cat["name"] if cat else ""
+            await q.edit_message_text(
+                "🔞 <b>Marked as 18+</b> — it won't be shown as safe for all.\n\n"
+                "🎞 How many videos? (send a number, 0 if unknown)",
+                parse_mode="HTML")
+            return EPISODES
         rows = [[InlineKeyboardButton(l, callback_data=f"addt:lang:{l}")] for l in LANGUAGES]
         await q.edit_message_text("🌐 Select language:", reply_markup=InlineKeyboardMarkup(rows))
         return LANGUAGE
@@ -217,39 +257,53 @@ async def got_parts(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.edit_message_text("🔢 How many parts? (send a number)")
         return EPISODES
     context.user_data["new_title"]["episode_count"] = int(val)
+    if context.user_data["new_title"].get("force_nsfw"):
+        return await _send_preview(context, q.message.reply_photo)
     await _ask_nsfw(q.edit_message_text, q.from_user.id, context)
     return NSFW
 
 
 async def got_episodes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     txt = (update.message.text or "").strip()
-    is_movie = helpers.is_movie_category(context.user_data["new_title"].get("category_name"))
+    d = context.user_data["new_title"]
+    is_movie = helpers.is_movie_category(d.get("category_name"))
     if not txt.isdigit():
-        await update.message.reply_text(
-            "⚠️ Send a number (1 for a single movie)." if is_movie else "⚠️ Send a number (0 if unknown)."
-        )
+        if d.get("force_nsfw"):
+            hint = "⚠️ Send a number of videos (0 if unknown)."
+        elif is_movie:
+            hint = "⚠️ Send a number (1 for a single movie)."
+        else:
+            hint = "⚠️ Send a number (0 if unknown)."
+        await update.message.reply_text(hint)
         return EPISODES
-    context.user_data["new_title"]["episode_count"] = int(txt)
+    d["episode_count"] = int(txt)
+    if d.get("force_nsfw"):
+        return await _send_preview(context, update.message.reply_photo)
     await _ask_nsfw(update.message.reply_text, update.effective_user.id, context)
     return NSFW
 
 
-async def got_nsfw(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    await q.answer()
-    context.user_data["new_title"]["is_nsfw"] = q.data.split(":")[2] == "1"
+async def _send_preview(context, reply_photo):
     d = context.user_data["new_title"]
     cat = await categories_q.get_by_id(d["category_id"])
     genre_names = await db.fetch(
         "SELECT name FROM genres WHERE genre_id = ANY($1::int[])", list(d["genre_ids"])
     )
+    adult = bool(d.get("is_nsfw"))
+    meta = []
+    if not adult:  # language / status aren't asked for 18+ uploads
+        meta.append(f"🌐 {d['language']}")
+        meta.append(f"📊 {d['status']}")
+    unit = helpers.unit_label(cat["name"] if cat else "", d["episode_count"], adult)
+    if unit:
+        meta.append(unit)
     preview = (
         "🔎 <b>PREVIEW</b>\n\n"
         f"<b>{d['title']}</b>\n"
         f"📂 {cat['emoji']} {cat['name']}\n"
         f"🎭 {', '.join(g['name'] for g in genre_names)}\n"
-        f"🌐 {d['language']} │ 📊 {d['status']} │ {helpers.unit_label(cat['name'] if cat else '', d['episode_count'])}\n"
-        f"🔞 {'Yes' if d['is_nsfw'] else 'No'}\n"
+        + (" │ ".join(meta) + "\n" if meta else "")
+        + f"🔞 {'Yes — 18+ only' if adult else 'No — safe for all'}\n"
         f"🔗 {d['channel_link']}\n\n"
         f"{d.get('description') or '(no description)'}"
     )
@@ -257,8 +311,15 @@ async def got_nsfw(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("✅ Publish", callback_data="addt:publish")],
         [InlineKeyboardButton("❌ Cancel", callback_data="addt:cancel")],
     ])
-    await q.message.reply_photo(photo=d["image_file_id"], caption=preview, reply_markup=kb, parse_mode="HTML")
+    await reply_photo(photo=d["image_file_id"], caption=preview, reply_markup=kb, parse_mode="HTML")
     return CONFIRM
+
+
+async def got_nsfw(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    context.user_data["new_title"]["is_nsfw"] = q.data.split(":")[2] == "1"
+    return await _send_preview(context, q.message.reply_photo)
 
 
 async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
