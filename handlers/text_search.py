@@ -18,7 +18,7 @@ from telegram.ext import ContextTypes
 import config
 from database.queries import titles as titles_q
 from database.queries import users as users_q
-from services import autodelete, title_search
+from services import autodelete, photo_bridge, title_search
 
 log = logging.getLogger("text_search")
 
@@ -80,13 +80,21 @@ def _card(row) -> str:
 # --------------------------------------------------------------------------
 # sending — bot-agnostic
 # --------------------------------------------------------------------------
-async def _send(bot, chat_id, text, kb, photo=None):
+async def _send(bot, bot_id, chat_id, text, kb, title_id=None, file_id=None):
+    """Send the card with its cover.
+
+    A clone can't use the main bot's file_id, so photo_bridge hands it a public
+    URL the first time and caches the clone's own file_id afterwards.
+    """
+    photo = await photo_bridge.photo_for(bot_id, title_id, file_id) if (title_id or file_id) else None
     if photo:
         try:
-            return await bot.send_photo(chat_id=chat_id, photo=photo, caption=text,
-                                        reply_markup=kb, parse_mode="HTML")
-        except Exception:  # noqa: BLE001 — dead file_id, fall back to text
-            log.warning("cover send failed in chat %s", chat_id)
+            m = await bot.send_photo(chat_id=chat_id, photo=photo, caption=text,
+                                     reply_markup=kb, parse_mode="HTML")
+            await photo_bridge.remember(bot_id, title_id, m)
+            return m
+        except Exception:  # noqa: BLE001
+            log.warning("cover send failed (bot %s, title %s)", bot_id, title_id, exc_info=True)
     return await bot.send_message(chat_id=chat_id, text=text, reply_markup=kb,
                                   parse_mode="HTML", disable_web_page_preview=True)
 
@@ -102,8 +110,10 @@ async def send_title_card(bot, bot_id, chat_id, tid, alternatives=None, schedule
         m = await bot.send_message(chat_id=chat_id, text="😕 That title is no longer available.")
     else:
         row = dict(row)
-        m = await _send(bot, chat_id, _card(row) + _TTL_NOTE,
-                        _title_kb(row, alternatives), row.get("image_file_id"))
+        m = await _send(bot, bot_id, chat_id, _card(row) + _TTL_NOTE,
+                        _title_kb(row, alternatives),
+                        title_id=row.get("title_id") or tid,
+                        file_id=row.get("image_file_id"))
     if schedule:
         await autodelete.schedule(bot_id, chat_id, m.message_id)
     return m

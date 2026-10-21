@@ -145,11 +145,20 @@ async def _on_message(bot, bot_id: int, update: Update):
         if deep_slug and not clone_manager.is_maintenance(bot_id):
             row = await titles_q.get_by_slug(deep_slug)
             if row:
-                await bot.send_message(
-                    uid,
-                    f"🎬 <b>{row['title']}</b>\n\nTap below to open it in AnimeZone 👇",
-                    reply_markup=_title_kb(deep_slug), parse_mode="HTML",
-                )
+                # same rich card (with cover) the main bot sends
+                from handlers import text_search
+
+                try:
+                    await text_search.send_title_card(
+                        bot, bot_id, uid, row["title_id"], schedule=False
+                    )
+                except Exception:  # noqa: BLE001
+                    log.exception("clone deep-link card failed")
+                    await bot.send_message(
+                        uid,
+                        f"🎬 <b>{row['title']}</b>\n\nTap below to open it in AnimeZone 👇",
+                        reply_markup=_title_kb(deep_slug), parse_mode="HTML",
+                    )
                 return
         if is_owner:
             await _send_panel(bot, bot_id, uid)

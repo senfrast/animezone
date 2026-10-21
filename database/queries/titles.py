@@ -26,6 +26,18 @@ def _bust():
         pass
 
 
+def _bust_image(tid):
+    """Artwork changed -> clones must re-fetch their own copy."""
+    try:
+        import asyncio
+
+        from services import photo_bridge
+
+        asyncio.get_running_loop().create_task(photo_bridge.forget(tid))
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def serialize(row, bookmark_ids=None) -> dict:
     if row is None:
         return None
@@ -316,6 +328,7 @@ async def remove_genre(tid: int, gid: int):
 
 async def set_image(tid: int, file_id: str):
     _bust()
+    _bust_image(tid)
     await db.execute(
         "UPDATE titles SET image_file_id=$1, updated_at=NOW() WHERE title_id=$2",
         file_id, tid,

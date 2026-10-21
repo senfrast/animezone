@@ -240,15 +240,27 @@ async def trending_searches(request):
 
 # ---------------- image ----------------
 async def image(request):
+    """Serve a cover.
+
+    The bytes are proxied rather than redirected to: the Telegram file URL
+    embeds the bot token, so a 302 would hand the token to every client. It
+    also gives clone bots a public URL they can hand to sendPhoto, since
+    file_ids don't work across bots.
+    """
     tid = int(request.match_info["title_id"])
     bot = request.app["bot"]
     file_id = await titles_q.get_image_file_id(tid)
     if not file_id:
         raise web.HTTPFound("/assets/placeholder.svg")
-    url = await image_service.get_url(bot, file_id)
-    if not url:
+    data = await image_service.get_bytes(bot, file_id)
+    if not data:
         raise web.HTTPFound("/assets/placeholder.svg")
-    raise web.HTTPFound(url)
+    body, ctype = data
+    return web.Response(
+        body=body,
+        content_type=ctype,
+        headers={"Cache-Control": "public, max-age=604800, immutable"},
+    )
 
 
 def setup_routes(app: web.Application):

@@ -32,8 +32,16 @@ async def can(user_id: int, perm: str) -> bool:
     return bool(perms.get(perm))
 
 
-async def publishes_instantly(user_id: int) -> bool:
-    """True when this user's uploads skip the approval queue."""
+async def publishes_instantly(user_id: int, is_nsfw: bool = False) -> bool:
+    """True when this user's upload skips the approval queue.
+
+    Adult uploads are gated separately: a moderator may be trusted to publish
+    normal titles instantly while their 18+ uploads still need a review.
+    """
+    if config.is_owner(user_id):
+        return True
+    if is_nsfw:
+        return await can(user_id, "auto_approve_nsfw")
     return await can(user_id, "auto_approve")
 
 

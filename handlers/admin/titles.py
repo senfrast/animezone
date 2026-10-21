@@ -276,10 +276,12 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # them the "⚡ Auto-publish" permission. Everyone else goes to the queue.
     from utils import roles
 
-    instant = await roles.publishes_instantly(q.from_user.id)
     # a moderator without the 18+ permission can never publish adult content
     if d.get("is_nsfw") and not await roles.may_upload_nsfw(q.from_user.id):
         d["is_nsfw"] = False
+    # decide approval only once the adult flag is final: 18+ uploads are gated
+    # by the separate "auto-publish 18+" permission.
+    instant = await roles.publishes_instantly(q.from_user.id, bool(d.get("is_nsfw")))
     row = await titles_q.create(d, approved=instant)
 
     if instant:

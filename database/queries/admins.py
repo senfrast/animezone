@@ -35,7 +35,7 @@ async def exists(user_id: int) -> bool:
 
 
 # ---------------- per-moderator permissions ----------------
-PERMS = ("auto_approve", "can_nsfw", "can_edit", "can_delete")
+PERMS = ("auto_approve", "auto_approve_nsfw", "can_nsfw", "can_edit", "can_delete")
 
 
 async def get_moderator(user_id: int):

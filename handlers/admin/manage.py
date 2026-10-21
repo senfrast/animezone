@@ -49,6 +49,8 @@ async def mods_view(update: Update, context: ContextTypes.DEFAULT_TYPE):
             badges = ""
             if m.get("auto_approve"):
                 badges += "⚡"
+            if m.get("auto_approve_nsfw"):
+                badges += "⚡🔞"
             if m.get("can_nsfw"):
                 badges += "🔞"
             if m.get("can_edit"):
@@ -60,7 +62,8 @@ async def mods_view(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"⚙️ {label} {badges}", callback_data=f"mperm:{m['user_id']}")])
     else:
         lines.append("• (none yet)")
-    lines.append("\n<i>⚡ auto-publish · 🔞 may add 18+ · ✏️ may edit · 🗑️ may delete</i>")
+    lines.append("\n<i>⚡ auto-publish · ⚡🔞 auto-publish 18+ · 🔞 may add 18+ · "
+                 "✏️ may edit · 🗑️ may delete</i>")
     rows.append([InlineKeyboardButton("➕ Add Moderator", callback_data="admin:addmod")])
     rows.append([InlineKeyboardButton("🔙 Back to Panel", callback_data="admin:home")])
     await q.edit_message_text("\n".join(lines), reply_markup=InlineKeyboardMarkup(rows), parse_mode="HTML")
@@ -69,6 +72,8 @@ async def mods_view(update: Update, context: ContextTypes.DEFAULT_TYPE):
 _PERM_LABELS = {
     "auto_approve": ("⚡ Auto-publish uploads",
                      "Their titles go live instantly — no approval queue."),
+    "auto_approve_nsfw": ("⚡🔞 Auto-publish 18+ uploads",
+                          "Their adult titles go live instantly too. Needs 18+ below."),
     "can_nsfw": ("🔞 May add 18+ content",
                  "Can mark a title as adult and post into Adults Nation."),
     "can_edit": ("✏️ May edit titles",

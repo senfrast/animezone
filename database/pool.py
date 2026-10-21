@@ -102,8 +102,15 @@ async def run_migrations():
                UNIQUE (chat_id, message_id)
            )""",
         "CREATE INDEX IF NOT EXISTS idx_pending_del_due ON pending_deletions (delete_at)",
+        """CREATE TABLE IF NOT EXISTS title_bot_images (
+               title_id BIGINT NOT NULL,
+               bot_id   BIGINT NOT NULL,
+               file_id  TEXT   NOT NULL,
+               PRIMARY KEY (title_id, bot_id)
+           )""",
         # Per-moderator permissions, controlled from the admin panel.
         "ALTER TABLE bot_admins ADD COLUMN IF NOT EXISTS auto_approve BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE bot_admins ADD COLUMN IF NOT EXISTS auto_approve_nsfw BOOLEAN DEFAULT FALSE",
         "ALTER TABLE bot_admins ADD COLUMN IF NOT EXISTS can_nsfw BOOLEAN DEFAULT FALSE",
         "ALTER TABLE bot_admins ADD COLUMN IF NOT EXISTS can_edit BOOLEAN DEFAULT FALSE",
         "ALTER TABLE bot_admins ADD COLUMN IF NOT EXISTS can_delete BOOLEAN DEFAULT FALSE",
