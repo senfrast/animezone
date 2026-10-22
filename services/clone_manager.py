@@ -17,6 +17,17 @@ log = logging.getLogger("clones")
 
 # bot_id -> telegram.Bot  (live API clients)
 _bots: dict[int, Bot] = {}
+# the main bot, registered at startup
+_main_bot = None
+
+
+def set_main_bot(bot):
+    global _main_bot
+    _main_bot = bot
+
+
+def main_bot():
+    return _main_bot
 # bot_id -> dict row cache (name/username/is_maintenance)
 _clones: dict[int, dict] = {}
 

@@ -9,6 +9,7 @@ own server; Telegram downloads it and hands us back a file_id that belongs to
 *that* clone, which we cache in ``title_bot_images``. Every later send for that
 clone is then a plain, instant file_id send — no download, no bandwidth.
 """
+import io
 import logging
 
 import config
@@ -47,6 +48,20 @@ async def photo_for(bot_id: int, title_id: int, main_file_id: str | None):
             return row["file_id"]
     except Exception:  # noqa: BLE001
         log.exception("photo cache lookup failed")
+    # Not cached yet. Prefer uploading the bytes ourselves: making Telegram
+    # fetch our URL costs an extra round trip and used to blow the send
+    # timeout, which produced a duplicate text card.
+    if main_file_id:
+        try:
+            from services import clone_manager, image_service
+
+            mb = clone_manager.main_bot()
+            if mb is not None:
+                data = await image_service.get_bytes(mb, main_file_id)
+                if data and data[0]:
+                    return io.BytesIO(data[0])
+        except Exception:  # noqa: BLE001
+            log.exception("could not load cover bytes for title %s", title_id)
     return public_url(title_id) if title_id else main_file_id
 
 

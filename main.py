@@ -136,9 +136,11 @@ async def run():
     except Exception:  # noqa: BLE001
         log.exception("clone load failed")
 
-    from services import autodelete
+    # explicit import: the one above lives inside a try block
+    from services import autodelete, clone_manager
 
     autodelete.set_main_bot(application.bot)
+    clone_manager.set_main_bot(application.bot)
 
     sched.start()
     log.info("🟢 AnimeZone started")

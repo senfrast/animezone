@@ -13,6 +13,7 @@ import html
 import logging
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
+from telegram.error import BadRequest, Forbidden, InvalidToken
 from telegram.ext import ContextTypes
 
 import config
@@ -90,12 +91,30 @@ async def _send(bot, bot_id, chat_id, text, kb, title_id=None, file_id=None):
     photo = await photo_bridge.photo_for(bot_id, title_id, file_id) if (title_id or file_id) else None
     if photo:
         try:
-            m = await bot.send_photo(chat_id=chat_id, photo=photo, caption=text,
-                                     reply_markup=kb, parse_mode="HTML")
-            await photo_bridge.remember(bot_id, title_id, m)
+            # Generous timeouts: a first-time cover upload takes a few seconds
+            # and the 5s default used to abort a send Telegram had accepted.
+            m = await bot.send_photo(
+                chat_id=chat_id, photo=photo, caption=text, reply_markup=kb,
+                parse_mode="HTML",
+                read_timeout=60, write_timeout=60, connect_timeout=20, pool_timeout=20,
+            )
+        except (BadRequest, Forbidden, InvalidToken) as e:
+            # Telegram rejected it outright, so nothing was delivered —
+            # falling back to a text card is safe.
+            log.warning("cover rejected (bot %s, title %s): %s", bot_id, title_id, e)
+        except Exception as e:  # noqa: BLE001
+            # Timeout / network blip: Telegram may well have delivered the
+            # photo. Sending a text copy here is what produced duplicate
+            # results, so treat it as sent.
+            log.warning("cover send uncertain (bot %s, title %s): %s — not resending",
+                        bot_id, title_id, e)
+            return None
+        else:
+            try:
+                await photo_bridge.remember(bot_id, title_id, m)
+            except Exception:  # noqa: BLE001 — caching must never affect delivery
+                log.exception("could not cache clone file_id")
             return m
-        except Exception:  # noqa: BLE001
-            log.warning("cover send failed (bot %s, title %s)", bot_id, title_id, exc_info=True)
     return await bot.send_message(chat_id=chat_id, text=text, reply_markup=kb,
                                   parse_mode="HTML", disable_web_page_preview=True)
 
@@ -115,7 +134,7 @@ async def send_title_card(bot, bot_id, chat_id, tid, alternatives=None, schedule
                         _title_kb(row, alternatives),
                         title_id=row.get("title_id") or tid,
                         file_id=row.get("image_file_id"))
-    if schedule:
+    if schedule and m is not None:
         await autodelete.schedule(bot_id, chat_id, m.message_id)
     return m
 
@@ -139,6 +158,7 @@ async def answer(bot, bot_id, chat_id, uid, query, query_message_id=None):
     results, adult = await title_search.find(titles_q, query, show_nsfw, limit=6)
     best = results[0] if results else None
     sent = None
+    handled = True
 
     # ---------- adult intent, no specific adult title matched ----------
     if adult and (not best or best[1] < THRESHOLD or not best[0]["is_nsfw"]):
@@ -193,7 +213,7 @@ async def answer(bot, bot_id, chat_id, uid, query, query_message_id=None):
     # the reply and the query that caused it both go away after 5 minutes
     ids = [m for m in (sent.message_id if sent else None, query_message_id) if m]
     await autodelete.schedule(bot_id, chat_id, ids)
-    return sent
+    return sent if sent is not None else handled
 
 
 # --------------------------------------------------------------------------

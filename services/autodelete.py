@@ -23,21 +23,19 @@ TTL_SECONDS = 300  # 5 minutes
 
 MAIN_BOT = 0  # bot_id used for the main bot's own messages
 
-# set once at startup by main.py
-_MAIN_BOT = None
-
-
 def set_main_bot(bot):
-    global _MAIN_BOT
-    _MAIN_BOT = bot
+    """Registered at startup by main.py."""
+    from services import clone_manager
+
+    clone_manager.set_main_bot(bot)
 
 
 def _resolve_bot(bot_id: int):
     """bot_id -> a telegram.Bot, or None if that clone is gone."""
-    if not bot_id or bot_id == MAIN_BOT:
-        return _MAIN_BOT
     from services import clone_manager
 
+    if not bot_id or bot_id == MAIN_BOT:
+        return clone_manager.main_bot()
     return clone_manager.get_bot(bot_id)
 
 
